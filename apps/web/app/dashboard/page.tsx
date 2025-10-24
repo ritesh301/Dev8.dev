@@ -23,16 +23,40 @@ export default function Dashboard() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (status === "loading") return;
-    if (!session) {
-      router.push("/signin");
-    }
+    if (!session) router.push("/signin");
   }, [session, status, router]);
+
+  // Workspace data hooks must be declared before any return to keep hook order stable
+  type Workspace = { id: string | number; name: string; status: "running" | "stopped" };
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [loadingWs, setLoadingWs] = useState(true);
+
+  // Fetch dynamic workspaces and keep them fresh
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    async function load() {
+      try {
+        const res = await fetch("/api/workspaces", { cache: "no-store" });
+        const j = await res.json();
+        setWorkspaces(j.workspaces ?? []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingWs(false);
+      }
+    }
+    if (session) {
+      load();
+      timer = setInterval(load, 10000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [session]);
 
   if (!mounted || status === "loading") {
     return (
@@ -45,61 +69,9 @@ export default function Dashboard() {
     );
   }
 
-  if (!session) {
-    return null;
-  }
+  if (!session) return null;
 
-  const recentProjects = [
-    {
-      name: "my-next-app",
-      language: "TypeScript",
-      lastModified: "2 hours ago",
-      status: "active",
-    },
-    {
-      name: "api-backend",
-      language: "Node.js",
-      lastModified: "5 hours ago",
-      status: "idle",
-    },
-    {
-      name: "portfolio-site",
-      language: "React",
-      lastModified: "1 day ago",
-      status: "deployed",
-    },
-  ];
-
-  const stats = [
-    {
-      title: "Total Projects",
-      value: "12",
-      icon: Code,
-      trend: "+2 this week",
-      color: "primary",
-    },
-    {
-      title: "Active Sessions",
-      value: "3",
-      icon: Activity,
-      trend: "2 running now",
-      color: "accent",
-    },
-    {
-      title: "Deployments",
-      value: "24",
-      icon: Zap,
-      trend: "+6 this month",
-      color: "secondary",
-    },
-    {
-      title: "Build Time",
-      value: "2.3s",
-      icon: Clock,
-      trend: "25% faster",
-      color: "primary",
-    },
-  ];
+  
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -113,139 +85,98 @@ export default function Dashboard() {
 
       <main className="ml-64 min-h-screen transition-all duration-300">
         <div className="container mx-auto px-8 py-8">
+          {/* Top bar with search + new workspace */}
           <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
-                Welcome back, {session.user?.name || "Developer"}!
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                Here&apos;s what&apos;s happening with your projects today
-              </p>
-            </div>
-            <Button
-              onClick={() => router.push("/editor")}
-              className="bg-gradient-to-r from-primary to-secondary hover:glow-primary"
-            >
-              <Code className="mr-2 h-4 w-4" />
-              New Project
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {stats.map((stat, index) => {
-              const Icon = stat.icon;
-              return (
-                <Card
-                  key={index}
-                  className="border-border bg-card/50 backdrop-blur hover:glow-primary hover-lift transition-all duration-300"
-                >
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      {stat.title}
-                    </CardTitle>
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Icon className="h-4 w-4 text-primary" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-foreground">{stat.value}</div>
-                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                      <TrendingUp className="h-3 w-3" />
-                      {stat.trend}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          <Card className="border-border bg-card/50 backdrop-blur mb-8">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-2xl">Recent Projects</CardTitle>
-                  <CardDescription>Your most recently active projects</CardDescription>
-                </div>
-                <Button variant="outline" className="hover:glow-secondary">
-                  View All
-                </Button>
+            <div className="flex items-center gap-4 w-full max-w-2xl">
+              <div className="relative w-full">
+                <input
+                  aria-label="Search workspaces"
+                  placeholder="Search workspaces..."
+                  className="w-full rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {recentProjects.map((project, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all cursor-pointer hover-lift"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-lg bg-primary/10">
-                        <Code className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-foreground">{project.name}</h3>
-                        <p className="text-sm text-muted-foreground">{project.language}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">{project.lastModified}</p>
-                      </div>
-                      <Badge
-                        variant={
-                          project.status === "active"
-                            ? "default"
-                            : project.status === "deployed"
-                            ? "secondary"
-                            : "outline"
-                        }
-                        className={
-                          project.status === "active"
-                            ? "bg-accent/20 text-accent border-accent/50"
-                            : ""
-                        }
-                      >
-                        {project.status}
-                      </Badge>
-                      <Button variant="ghost" size="sm">
-                        <Terminal className="h-4 w-4" />
-                      </Button>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Button onClick={() => router.push("/workspaces/new")} className="bg-gradient-to-r from-primary to-secondary">
+                + New Workspace
+              </Button>
+              <button className="h-9 w-9 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground">
+                <span>🔔</span>
+              </button>
+              <div className="h-9 w-9 rounded-full bg-card border border-border flex items-center justify-center text-muted-foreground">R</div>
+            </div>
+          </div>
+
+          {/* Heading */}
+          <h2 className="text-2xl font-semibold mb-4">Your Workspaces</h2>
+
+          {/* Workspace cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {(loadingWs ? [1,2,3].map(n => ({ id: n, name: "Loading...", status: "running" as const })) : workspaces).map((ws) => (
+              <Card key={ws.id} className="border-border bg-card/50 backdrop-blur">
+                <div className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">{ws.name}</h3>
+                      <p className={`text-sm mt-1 ${ws.status === "running" ? "text-green-500" : "text-rose-500"}`}>
+                        {ws.status === "running" ? "Running" : "Stopped"}
+                      </p>
                     </div>
                   </div>
-                ))}
+
+                  <div className="h-px my-4 bg-border" />
+
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <div className="flex items-center gap-4">
+                      <button onClick={() => router.push(`/workspaces/${ws.id}/ide`)} className="text-primary hover:underline">Open IDE</button>
+                      <button
+                        onClick={async () => {
+                          try { await fetch('/api/workspaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ws.id, action: 'toggle' }) }); } catch {}
+                        }}
+                        className="hover:underline"
+                      >
+                        {ws.status === 'running' ? 'Stop' : 'Start'}
+                      </button>
+                      <button
+                        onClick={async () => { try { await fetch('/api/workspaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ws.id, action: 'clone' }) }); } catch {} }}
+                        className="hover:underline"
+                      >
+                        Clone
+                      </button>
+                      <button
+                        onClick={async () => { try { await fetch('/api/workspaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ws.id, action: 'delete' }) }); } catch {} }}
+                        className="text-rose-500 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    <div className="text-xs text-muted-foreground">&nbsp;</div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Two panels below */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="border-border bg-card/50 px-4 py-6">
+              <h3 className="text-lg font-semibold">Create a Custom Template</h3>
+              <p className="text-sm text-muted-foreground mt-2">Build a base environment with your preferred tools and dotfiles.</p>
+              <div className="mt-4">
+                <Button onClick={() => router.push('/templates/new')} className="bg-gradient-to-r from-primary to-secondary">
+                  Build Template
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-border bg-card/50 backdrop-blur hover:glow-primary hover-lift cursor-pointer transition-all duration-300">
-              <CardHeader>
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 mb-2">
-                  <GitBranch className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle>Clone Repository</CardTitle>
-                <CardDescription>Import a project from GitHub, GitLab, or Bitbucket</CardDescription>
-              </CardHeader>
             </Card>
 
-            <Card className="border-border bg-card/50 backdrop-blur hover:glow-secondary hover-lift cursor-pointer transition-all duration-300">
-              <CardHeader>
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary/10 mb-2">
-                  <Terminal className="h-6 w-6 text-secondary" />
-                </div>
-                <CardTitle>New Terminal</CardTitle>
-                <CardDescription>Open a new terminal session in the cloud</CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-border bg-card/50 backdrop-blur hover:glow-accent hover-lift cursor-pointer transition-all duration-300">
-              <CardHeader>
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent/10 mb-2">
-                  <Zap className="h-6 w-6 text-accent" />
-                </div>
-                <CardTitle>Deploy Project</CardTitle>
-                <CardDescription>Deploy your application with one click</CardDescription>
-              </CardHeader>
+            <Card className="border-border bg-card/50 px-4 py-6">
+              <h3 className="text-lg font-semibold">Start from a Repository</h3>
+              <p className="text-sm text-muted-foreground mt-2">Create a new workspace directly from a Git repository URL.</p>
+              <div className="mt-4 flex gap-2">
+                <input placeholder="Paste a Git Repository URL..." className="flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground" />
+                <Button variant="outline" disabled className="opacity-60">Create</Button>
+              </div>
             </Card>
           </div>
         </div>

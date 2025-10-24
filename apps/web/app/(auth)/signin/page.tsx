@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Code, ArrowLeft, Mail, Lock, Loader2 } from "lucide-react";
 
-export default function SignInPage() {
+function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -72,7 +73,7 @@ export default function SignInPage() {
 
       {/* Sign In Form */}
       <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-md space-y-8 fade-in">
+        <div className="w-full max-w-md space-y-8 fade-in" suppressHydrationWarning>
           <div className="text-center">
             <h2 className="text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
               Welcome back
@@ -212,3 +213,5 @@ export default function SignInPage() {
     </div>
   );
 }
+
+export default dynamic(() => Promise.resolve(SignInPage), { ssr: false });
