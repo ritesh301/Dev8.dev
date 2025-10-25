@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Play, Square, RotateCw } from "lucide-react";
+import { CodeEditor } from "@/components/ide/CodeEditor";
+import { SandboxRunner, SandboxRunnerHandle } from "@/components/ide/SandboxRunner";
+import prettier from "prettier/standalone";
+import parserBabel from "prettier/plugins/babel";
+import pluginEstree from "prettier/plugins/estree";
+import parserTypescript from "prettier/plugins/typescript";
 
 type Details = {
   id: string;
@@ -38,6 +44,14 @@ export default function WorkspaceIDEPage() {
   const [snapshots, setSnapshots] = useState<Array<{ id: string; createdAt: number; location: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<"start" | "stop" | "restart" | null>(null);
+  const [language, setLanguage] = useState<"javascript" | "typescript">("javascript");
+  const [code, setCode] = useState<string>(
+    `// Welcome to CloudIDEX web IDE\n` +
+    `// Click Run to execute.\n` +
+    `function greet(name){ return 'Hello, ' + name + '!'; }\n` +
+    `console.log(greet('world'));\n`
+  );
+  const runnerRef = useRef<SandboxRunnerHandle>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -47,15 +61,32 @@ export default function WorkspaceIDEPage() {
   async function loadAll(signal?: AbortSignal) {
     try {
       const [d, m, t, s] = await Promise.all([
-        fetch(`/api/workspaces/${id}/details`, { cache: "no-store", signal }).then((r) => r.json()),
-        fetch(`/api/workspaces/${id}/metrics`, { cache: "no-store", signal }).then((r) => r.json()),
-        fetch(`/api/workspaces/${id}/terminal`, { cache: "no-store", signal }).then((r) => r.json()),
-        fetch(`/api/workspaces/${id}/snapshots`, { cache: "no-store", signal }).then((r) => r.json()),
+        fetch(`/api/workspaces/${id}/details`, { cache: "no-store", signal }).then(async (r) => {
+          if (!r.ok) throw new Error(`details ${r.status}`);
+          return r.json();
+        }),
+        fetch(`/api/workspaces/${id}/metrics`, { cache: "no-store", signal }).then(async (r) => {
+          if (!r.ok) throw new Error(`metrics ${r.status}`);
+          return r.json();
+        }),
+        fetch(`/api/workspaces/${id}/terminal`, { cache: "no-store", signal }).then(async (r) => {
+          if (!r.ok) throw new Error(`terminal ${r.status}`);
+          return r.json();
+        }),
+        fetch(`/api/workspaces/${id}/snapshots`, { cache: "no-store", signal }).then(async (r) => {
+          if (!r.ok) throw new Error(`snapshots ${r.status}`);
+          return r.json();
+        }),
       ]);
       setDetails(d);
       setMetrics(m);
-      setTerminal(t.lines);
-      setSnapshots(s.snapshots);
+      setTerminal(Array.isArray(t?.lines) ? t.lines : []);
+      setSnapshots(Array.isArray(s?.snapshots) ? s.snapshots : []);
+    } catch (e: unknown) {
+      // Ignore abort errors caused by effect cleanup or route changes
+      const name = (e as any)?.name || '';
+      if (name === 'AbortError' || e instanceof DOMException) return;
+      console.error('IDE loadAll error', e);
     } finally {
       setLoading(false);
     }
@@ -93,6 +124,26 @@ export default function WorkspaceIDEPage() {
     setSnapshots(s.snapshots);
   }
 
+  function appendTerminal(line: string) {
+    setTerminal((prev) => [...prev, line].slice(-120));
+  }
+
+  function runCode() {
+    appendTerminal(`$ Running (${language})...`);
+    runnerRef.current?.run(code, language);
+  }
+
+  async function formatCode() {
+    try {
+      const parser = language === "typescript" ? "typescript" : "babel";
+      const plugins = parser === "typescript" ? [parserTypescript, pluginEstree] : [parserBabel, pluginEstree];
+      const formatted = await prettier.format(code, { parser, plugins });
+      setCode(formatted);
+    } catch (e) {
+      appendTerminal(`format error: ${String((e as any)?.message || e)}`);
+    }
+  }
+
   if (status === "loading" || loading || !details || !metrics) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -126,10 +177,28 @@ export default function WorkspaceIDEPage() {
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {/* VS Code Editor placeholder */}
+            {/* Editor */}
             <Card className="xl:col-span-2 border-border bg-card/50">
-              <div className="p-4 md:p-6 h-80 md:h-[420px] rounded-md border border-dashed border-border flex items-center justify-center text-sm text-muted-foreground">
-                VS Code Editor (Web)
+              <div className="p-3 md:p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Language</span>
+                    <select
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value as any)}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs"
+                    >
+                      <option value="javascript">JavaScript</option>
+                      <option value="typescript">TypeScript</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={formatCode} className="h-8 px-3">Format</Button>
+                    <Button onClick={runCode} className="h-8 px-3 bg-primary"><Play className="h-4 w-4 mr-1"/> Run</Button>
+                  </div>
+                </div>
+                <CodeEditor value={code} language={language} onChange={setCode} height={420} />
+                <SandboxRunner ref={runnerRef} className="hidden" onLog={(l) => appendTerminal(l)} />
               </div>
             </Card>
 

@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Shield, LogOut, Trash2, Link2 } from "lucide-react";
 
-type Conn = { provider: string; connected: boolean };
+type Conn = { provider: string; connected: boolean; available?: boolean };
 
 export default function Settings() {
   const { data: session, status } = useSession();
@@ -18,16 +18,24 @@ export default function Settings() {
 
   // fetch dynamic connection statuses
   useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
     async function load() {
       try {
         const r = await fetch("/api/account/connections", { cache: "no-store" });
-        const j = await r.json();
+        if (!r.ok) return; // don't attempt to parse error pages
+        const text = await r.text();
+        if (!text) return; // guard against empty body
+        const j = JSON.parse(text);
         setConnections(j.connections ?? []);
       } catch (e) {
-        console.error(e);
+        console.error("settings: connections fetch error", e);
       }
     }
-    if (status === "authenticated") load();
+    if (status === "authenticated") {
+      load();
+      timer = setInterval(load, 8000);
+    }
+    return () => { if (timer) clearInterval(timer); };
   }, [status]);
 
   useEffect(() => {
@@ -132,13 +140,15 @@ export default function Settings() {
                       </div>
                       {c.connected ? (
                         <span className="text-xs text-emerald-500">Connected</span>
+                      ) : c.available === false ? (
+                        <span className="text-xs text-rose-500">Unavailable</span>
                       ) : (
                         <Button
                           variant="outline"
                           onClick={() => {
                             const p = c.provider.toLowerCase();
-                            // Kick off OAuth sign-in to link account
-                            window.location.href = `/api/auth/signin/${p}`;
+                            // Kick off OAuth sign-in to link account and return here
+                            window.location.href = `/api/auth/signin/${p}?callbackUrl=${encodeURIComponent('/settings')}`;
                           }}
                         >
                           Connect
