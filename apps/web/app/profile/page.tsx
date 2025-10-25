@@ -31,14 +31,24 @@ export default function Profile() {
   }
 
   useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
     async function load() {
       try {
         const r = await fetch("/api/account/connections", { cache: "no-store" });
-        const j = await r.json();
+        if (!r.ok) return;
+        const text = await r.text();
+        if (!text) return;
+        const j = JSON.parse(text);
         setConnections(j.connections ?? []);
-      } catch {}
+      } catch (e) {
+        console.error("profile: connections fetch error", e);
+      }
     }
-    if (status === "authenticated") load();
+    if (status === "authenticated") {
+      load();
+      timer = setInterval(load, 8000);
+    }
+    return () => { if (timer) clearInterval(timer); };
   }, [status]);
 
   return (
