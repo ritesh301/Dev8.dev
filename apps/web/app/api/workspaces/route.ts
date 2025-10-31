@@ -1,45 +1,162 @@
-import { NextResponse } from "next/server";
+/**
+ * Workspace Management APIs
+ * GET /api/workspaces - List user's workspaces
+ * POST /api/workspaces - Create new workspace (integrates with Agent)
+ */
 
-type WS = { id: number; name: string; status: "running" | "stopped" };
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth';
+import { createWorkspaceSchema } from '@/lib/validations';
+import { handleAPIError, createErrorResponse, ErrorCodes } from '@/lib/errors';
 
-let workspaces: WS[] = [
-  { id: 1, name: "Workspace #1 - AWS EC2 XL", status: "running" },
-  { id: 2, name: "Workspace #2 - GCP VM", status: "stopped" },
-  { id: 3, name: "Workspace #3 - Azure VM", status: "running" },
-];
+/**
+ * GET /api/workspaces
+ * List user's environments/workspaces with filtering and pagination
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const payload = await requireAuth(request);
+    const { searchParams } = new URL(request.url);
 
-export async function GET() {
-  // add tiny random toggles to look alive
-  if (Math.random() < 0.1) {
-    const i = Math.floor(Math.random() * workspaces.length);
-    const w = workspaces[i];
-    if (w) workspaces[i] = { ...w, status: w.status === "running" ? "stopped" : "running" };
-  }
-  return NextResponse.json({ workspaces, updatedAt: new Date().toISOString() });
-}
+    const status = searchParams.get('status');
+    const region = searchParams.get('region');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const sort = searchParams.get('sort') || 'createdAt';
+    const order = searchParams.get('order') || 'desc';
 
-export async function POST(req: Request) {
-  const body = await req.json();
-  const { id, action } = body;
-  if (action === "toggle") {
-    workspaces = workspaces.map((w) => (w.id === Number(id) ? { ...w, status: w.status === "running" ? "stopped" : "running" } : w));
-  } else if (action === "clone") {
-    const src = workspaces.find((w) => w.id === Number(id));
-    if (src) {
-      const maxId = workspaces.reduce((m, w) => Math.max(m, w.id), 0);
-      workspaces.push({ id: maxId + 1, name: src.name + " (Clone)", status: "stopped" });
+    // Build where clause
+    const where: any = {
+      userId: payload.userId,
+    };
+
+    if (status) {
+      where.status = status;
     }
-  } else if (action === "delete") {
-    workspaces = workspaces.filter((w) => w.id !== Number(id));
-  } else if (action === "create") {
-    // Create a new workspace from provided payload
-    const maxId = workspaces.reduce((m, w) => Math.max(m, w.id), 0);
-    const name: string = body?.name || `Workspace #${maxId + 1}`;
-    const provider: string = body?.provider ?? "multi";
-    const image: string = body?.image ?? "docker";
-    const size: string = body?.size ?? "small";
-    const created: WS = { id: maxId + 1, name: `${name} - ${provider.toUpperCase()} (${image}/${size})`, status: "running" };
-    workspaces = [...workspaces, created];
+
+    if (region) {
+      where.cloudRegion = region;
+    }
+
+    // Get environments (workspaces)
+    const environments = await prisma.environment.findMany({
+      where,
+      include: {
+        workspace: {
+          select: {
+            id: true,
+            storagePath: true,
+            totalSizeMB: true,
+          },
+        },
+      },
+      orderBy: {
+        [sort]: order,
+      },
+      take: Math.min(limit, 100),
+      skip: offset,
+    });
+
+    const total = await prisma.environment.count({ where });
+
+    // Transform environments to match frontend expectations
+    const workspaces = environments.map(env => ({
+      id: env.id,
+      name: env.name,
+      status: env.status.toLowerCase(), // Convert STOPPED/RUNNING to stopped/running
+      cloudRegion: env.cloudRegion,
+      cpuCores: env.cpuCores,
+      memoryGB: env.memoryGB,
+      storageGB: env.storageGB,
+      baseImage: env.baseImage,
+      createdAt: env.createdAt,
+      updatedAt: env.updatedAt,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      workspaces, // Frontend expects 'workspaces' array
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + environments.length < total,
+      },
+    });
+  } catch (error) {
+    const { response, status } = handleAPIError(error);
+    return NextResponse.json(response, { status });
   }
-  return NextResponse.json({ ok: true, workspaces });
 }
+
+/**
+ * POST /api/workspaces
+ * Create new workspace/environment (integrates with Agent API)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const payload = await requireAuth(request);
+    const body = await request.json();
+
+    // Validate request
+    const validation = createWorkspaceSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        { status: 400 }
+      );
+    }
+
+    const data = validation.data;
+
+    // Check user's workspace quota (example: max 10)
+    const existingCount = await prisma.environment.count({
+      where: { userId: payload.userId },
+    });
+
+    if (existingCount >= 10) {
+      return NextResponse.json(
+        createErrorResponse(402, ErrorCodes.QUOTA_EXCEEDED, 'Maximum workspace limit reached'),
+        { status: 402 }
+      );
+    }
+
+    // Create environment record in database
+    // For MVP: Create workspace directly without Agent API integration
+    const environment = await prisma.environment.create({
+      data: {
+        userId: payload.userId,
+        name: data.name,
+        status: 'STOPPED', // Start as STOPPED until Agent API is available
+        cloudProvider: 'AZURE',
+        cloudRegion: data.cloudRegion,
+        cpuCores: data.cpuCores,
+        memoryGB: data.memoryGB,
+        storageGB: data.storageGB,
+        baseImage: data.baseImage,
+        ideType: 'VSCODE',
+        agentType: 'NONE',
+      },
+    });
+
+    // TODO: Integrate with Agent API when available
+    // For now, return the workspace immediately for frontend testing
+    // The user can manually start it later when Agent API is running
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          environment,
+          message: 'Workspace created successfully. Start it when ready.',
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    const { response, status } = handleAPIError(error);
+    return NextResponse.json(response, { status });
+  }
+}
+

@@ -132,20 +132,64 @@ export default function Dashboard() {
                       <button onClick={() => router.push(`/workspaces/${ws.id}/ide`)} className="text-primary hover:underline">Open IDE</button>
                       <button
                         onClick={async () => {
-                          try { await fetch('/api/workspaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ws.id, action: 'toggle' }) }); } catch {}
+                          try {
+                            const endpoint = ws.status === 'running' 
+                              ? `/api/workspaces/${ws.id}/stop` 
+                              : `/api/workspaces/${ws.id}/start`;
+                            const res = await fetch(endpoint, { method: 'POST' });
+                            if (res.ok) {
+                              // Reload workspaces
+                              const wsRes = await fetch("/api/workspaces", { cache: "no-store" });
+                              const j = await wsRes.json();
+                              setWorkspaces(j.workspaces ?? []);
+                            }
+                          } catch (e) {
+                            console.error('Failed to toggle workspace:', e);
+                          }
                         }}
                         className="hover:underline"
                       >
                         {ws.status === 'running' ? 'Stop' : 'Start'}
                       </button>
                       <button
-                        onClick={async () => { try { await fetch('/api/workspaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ws.id, action: 'clone' }) }); } catch {} }}
+                        onClick={async () => { 
+                          try {
+                            const res = await fetch(`/api/workspaces/${ws.id}/clone`, { method: 'POST' });
+                            if (res.ok) {
+                              // Reload workspaces to show the new clone
+                              const wsRes = await fetch("/api/workspaces", { cache: "no-store" });
+                              const j = await wsRes.json();
+                              setWorkspaces(j.workspaces ?? []);
+                              alert('Workspace cloned successfully!');
+                            } else {
+                              const error = await res.json();
+                              alert(`Failed to clone workspace: ${error.message || 'Unknown error'}`);
+                            }
+                          } catch (e) {
+                            console.error('Failed to clone workspace:', e);
+                            alert('Failed to clone workspace');
+                          }
+                        }}
                         className="hover:underline"
                       >
                         Clone
                       </button>
                       <button
-                        onClick={async () => { try { await fetch('/api/workspaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ws.id, action: 'delete' }) }); } catch {} }}
+                        onClick={async () => { 
+                          if (!confirm(`Are you sure you want to delete "${ws.name}"?`)) return;
+                          try {
+                            const res = await fetch(`/api/workspaces/${ws.id}`, { method: 'DELETE' });
+                            if (res.ok) {
+                              // Remove from list
+                              setWorkspaces(workspaces.filter(w => w.id !== ws.id));
+                            } else {
+                              alert('Failed to delete workspace');
+                            }
+                          } catch (e) {
+                            console.error('Failed to delete workspace:', e);
+                            alert('Failed to delete workspace');
+                          }
+                        }}
                         className="text-rose-500 hover:underline"
                       >
                         Delete

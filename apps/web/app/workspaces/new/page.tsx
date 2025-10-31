@@ -76,14 +76,35 @@ export default function NewWorkspacePage() {
   async function onSubmit() {
     setSubmitting(true);
     try {
-      await fetch("/api/workspaces", {
+      // Map size to actual resource values
+      const sizeConfig = options?.sizes.find(s => s.id === size) || { cpu: 2, ramGb: 4 };
+      
+      const payload = {
+        name,
+        cloudRegion: region,
+        cpuCores: sizeConfig.cpu,
+        memoryGB: sizeConfig.ramGb,
+        storageGB: 20, // Default storage
+        baseImage: image,
+      };
+
+      const response = await fetch("/api/workspaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", name, provider, image, size, region }),
+        body: JSON.stringify(payload),
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Workspace creation failed:", error);
+        alert(`Failed to create workspace: ${error.message || 'Unknown error'}`);
+        return;
+      }
+
       router.push("/dashboard");
     } catch (e) {
       console.error(e);
+      alert("Failed to create workspace. Please try again.");
     } finally {
       setSubmitting(false);
     }
