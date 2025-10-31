@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     const where: any = {
-      userId: payload.userId,
+      userId: payload.id,
     };
 
     if (status) {
@@ -85,8 +85,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -103,7 +102,7 @@ export async function POST(request: NextRequest) {
     const validation = createWorkspaceSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
@@ -112,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     // Check user's workspace quota (example: max 10)
     const existingCount = await prisma.environment.count({
-      where: { userId: payload.userId },
+      where: { userId: payload.id },
     });
 
     if (existingCount >= 10) {
@@ -126,7 +125,7 @@ export async function POST(request: NextRequest) {
     // For MVP: Create workspace directly without Agent API integration
     const environment = await prisma.environment.create({
       data: {
-        userId: payload.userId,
+        userId: payload.id,
         name: data.name,
         status: 'STOPPED', // Start as STOPPED until Agent API is available
         cloudProvider: 'AZURE',
@@ -155,8 +154,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 

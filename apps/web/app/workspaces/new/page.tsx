@@ -81,6 +81,7 @@ export default function NewWorkspacePage() {
       
       const payload = {
         name,
+        cloudProvider: provider.toUpperCase(), // Convert to uppercase: AWS, GCP, AZURE, LOCAL
         cloudRegion: region,
         cpuCores: sizeConfig.cpu,
         memoryGB: sizeConfig.ramGb,

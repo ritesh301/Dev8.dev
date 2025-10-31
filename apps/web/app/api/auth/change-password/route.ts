@@ -21,25 +21,25 @@ export async function POST(request: NextRequest) {
     const validation = changePasswordSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
 
-    const { oldPassword, newPassword } = validation.data;
+    const { currentPassword, newPassword } = validation.data;
 
     // Validate new password strength
     const passwordValidation = validatePasswordStrength(newPassword);
     if (!passwordValidation.valid) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, passwordValidation.message || 'Invalid password'),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, passwordValidation.errors.join(', ')),
         { status: 400 }
       );
     }
 
     // Get user
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.id },
     });
 
     if (!user || !user.password) {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify old password
-    const isValid = await verifyPassword(oldPassword, user.password);
+    const isValid = await verifyPassword(currentPassword, user.password);
     if (!isValid) {
       return NextResponse.json(
         createErrorResponse(401, ErrorCodes.INVALID_CREDENTIALS, 'Current password is incorrect'),
@@ -73,7 +73,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

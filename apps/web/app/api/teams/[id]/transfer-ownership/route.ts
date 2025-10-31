@@ -27,13 +27,13 @@ export async function POST(
     const validation = transferOwnershipSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
 
     // Check permissions (only current OWNER)
-    const isOwner = await isTeamOwner(payload.userId, id);
+    const isOwner = await isTeamOwner(payload.id, id);
     if (!isOwner) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Only the current owner can transfer ownership'),
@@ -71,7 +71,7 @@ export async function POST(
       prisma.teamMember.updateMany({
         where: {
           teamId: id,
-          userId: payload.userId,
+          userId: payload.id,
         },
         data: { role: 'ADMIN' },
       }),
@@ -82,7 +82,6 @@ export async function POST(
       message: 'Ownership transferred successfully',
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

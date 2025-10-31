@@ -29,7 +29,7 @@ export async function POST(
     }
 
     // Verify ownership
-    if (original.userId !== payload.userId) {
+    if (original.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -38,7 +38,7 @@ export async function POST(
 
     // Check user's workspace quota (example: max 10)
     const existingCount = await prisma.environment.count({
-      where: { userId: payload.userId },
+      where: { userId: payload.id },
     });
 
     if (existingCount >= 10) {
@@ -51,7 +51,7 @@ export async function POST(
     // Create cloned environment
     const cloned = await prisma.environment.create({
       data: {
-        userId: payload.userId,
+        userId: payload.id,
         name: `${original.name} (Copy)`,
         status: 'STOPPED',
         cloudProvider: original.cloudProvider,
@@ -74,7 +74,6 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

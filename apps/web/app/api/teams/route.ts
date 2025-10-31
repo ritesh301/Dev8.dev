@@ -18,12 +18,13 @@ export async function POST(request: NextRequest) {
     const validation = createTeamSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
 
-    const { name, slug, description, logo } = validation.data;
+    const { name, description } = validation.data;
+    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
     // Check slug uniqueness
     const existingTeam = await prisma.team.findUnique({
@@ -43,17 +44,16 @@ export async function POST(request: NextRequest) {
         name,
         slug,
         description,
-        logo,
         members: {
           create: {
-            userId: payload.userId,
+            userId: payload.id,
             role: 'OWNER',
           },
         },
       },
       include: {
         members: {
-          where: { userId: payload.userId },
+          where: { userId: payload.id },
         },
       },
     });
@@ -81,8 +81,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -100,7 +99,7 @@ export async function GET(request: NextRequest) {
 
     // Get user's team memberships
     const memberships = await prisma.teamMember.findMany({
-      where: { userId: payload.userId },
+      where: { userId: payload.id },
       include: {
         team: {
           include: {
@@ -115,7 +114,7 @@ export async function GET(request: NextRequest) {
     });
 
     const total = await prisma.teamMember.count({
-      where: { userId: payload.userId },
+      where: { userId: payload.id },
     });
 
     const teams = memberships.map((membership) => ({
@@ -144,7 +143,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

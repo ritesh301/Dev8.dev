@@ -19,7 +19,7 @@ export async function GET(
     const { id } = await params;
 
     // Verify user is team member
-    const isMember = await isTeamMember(payload.userId, id);
+    const isMember = await isTeamMember(payload.id, id);
     if (!isMember) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'You are not a member of this team'),
@@ -69,7 +69,7 @@ export async function GET(
       },
     });
 
-    const myRole = await getUserTeamRole(payload.userId, id);
+    const myRole = await getUserTeamRole(payload.id, id);
 
     return NextResponse.json({
       success: true,
@@ -100,8 +100,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -122,13 +121,13 @@ export async function PATCH(
     const validation = updateTeamSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
 
     // Check permissions (OWNER or ADMIN)
-    const canUpdate = await checkTeamPermission(payload.userId, id, 'team:update');
+    const canUpdate = await checkTeamPermission(payload.id, id, 'team:update');
     if (!canUpdate) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Only team owners and admins can update team details'),
@@ -147,8 +146,7 @@ export async function PATCH(
       data: { team },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -169,13 +167,13 @@ export async function DELETE(
     const validation = deleteTeamSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
 
     // Check permissions (OWNER only)
-    const canDelete = await checkTeamPermission(payload.userId, id, 'team:delete');
+    const canDelete = await checkTeamPermission(payload.id, id, 'team:delete');
     if (!canDelete) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Only team owner can delete the team'),
@@ -220,7 +218,6 @@ export async function DELETE(
       message: 'Team deleted successfully. Team workspaces will be deleted after 7 days.',
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

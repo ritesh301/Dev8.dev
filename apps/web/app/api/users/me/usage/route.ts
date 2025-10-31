@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     // Get usage stats
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.id },
       include: {
         environments: {
           select: {
@@ -68,7 +68,6 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

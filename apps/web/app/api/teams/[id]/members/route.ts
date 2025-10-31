@@ -23,7 +23,7 @@ export async function GET(
     const offset = parseInt(searchParams.get('offset') || '0');
 
     // Verify user is team member
-    const isMember = await isTeamMember(payload.userId, id);
+    const isMember = await isTeamMember(payload.id, id);
     if (!isMember) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'You are not a member of this team'),
@@ -68,8 +68,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -90,13 +89,13 @@ export async function POST(
     const validation = inviteMemberSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
 
     // Check permissions
-    const canInvite = await checkTeamPermission(payload.userId, id, 'member:invite');
+    const canInvite = await checkTeamPermission(payload.id, id, 'member:invite');
     if (!canInvite) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Only team owners and admins can invite members'),
@@ -104,67 +103,8 @@ export async function POST(
       );
     }
 
-    const { email, userId, role } = validation.data;
+    const { email, role } = validation.data;
 
-    // If userId provided, add directly
-    if (userId) {
-      // Check if user exists
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        return NextResponse.json(
-          createErrorResponse(404, ErrorCodes.NOT_FOUND, 'User not found'),
-          { status: 404 }
-        );
-      }
-
-      // Check if already a member
-      const existingMember = await prisma.teamMember.findUnique({
-        where: {
-          teamId_userId: {
-            teamId: id,
-            userId,
-          },
-        },
-      });
-
-      if (existingMember) {
-        return NextResponse.json(
-          createErrorResponse(400, ErrorCodes.CONFLICT, 'User is already a team member'),
-          { status: 400 }
-        );
-      }
-
-      // Add member
-      const member = await prisma.teamMember.create({
-        data: {
-          teamId: id,
-          userId,
-          role: role || 'MEMBER',
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-        },
-      });
-
-      return NextResponse.json(
-        {
-          success: true,
-          message: 'Member added successfully',
-          data: { member },
-        },
-        { status: 201 }
-      );
-    }
 
     // If email provided, create invitation
     if (email) {
@@ -202,7 +142,7 @@ export async function POST(
           email,
           role: role || 'MEMBER',
           token,
-          invitedBy: payload.userId,
+          invitedBy: payload.id,
           expiresAt,
         },
       });
@@ -232,7 +172,6 @@ export async function POST(
       { status: 400 }
     );
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

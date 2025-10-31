@@ -45,7 +45,7 @@ export async function GET(
     }
 
     // Verify ownership
-    if (environment.userId !== payload.userId) {
+    if (environment.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -63,8 +63,7 @@ export async function GET(
       data: environment,
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -85,7 +84,7 @@ export async function PATCH(
     const validation = updateWorkspaceSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
@@ -102,7 +101,7 @@ export async function PATCH(
       );
     }
 
-    if (environment.userId !== payload.userId) {
+    if (environment.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -122,8 +121,7 @@ export async function PATCH(
       data: updated,
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -151,7 +149,7 @@ export async function DELETE(
       );
     }
 
-    if (environment.userId !== payload.userId) {
+    if (environment.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -169,7 +167,6 @@ export async function DELETE(
       message: 'Workspace deleted successfully',
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

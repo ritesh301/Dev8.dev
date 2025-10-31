@@ -23,13 +23,13 @@ export async function PATCH(
     const validation = updateMemberRoleSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
 
     // Check permissions (only OWNER can change roles)
-    const canUpdateRole = await checkTeamPermission(payload.userId, id, 'member:update-role');
+    const canUpdateRole = await checkTeamPermission(payload.id, id, 'member:update-role');
     if (!canUpdateRole) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Only team owner can change member roles'),
@@ -50,7 +50,7 @@ export async function PATCH(
     }
 
     // Cannot change own role (except when transferring ownership)
-    if (member.userId === payload.userId && validation.data.role !== 'OWNER') {
+    if (member.userId === payload.id && validation.data.role !== 'OWNER') {
       return NextResponse.json(
         createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Cannot change your own role'),
         { status: 400 }
@@ -95,8 +95,7 @@ export async function PATCH(
       data: { member: updatedMember },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -123,7 +122,7 @@ export async function DELETE(
       );
     }
 
-    const myRole = await getUserTeamRole(payload.userId, id);
+    const myRole = await getUserTeamRole(payload.id, id);
     if (!myRole) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'You are not a member of this team'),
@@ -132,8 +131,8 @@ export async function DELETE(
     }
 
     // Check permissions
-    const isSelf = member.userId === payload.userId;
-    const canRemove = await checkTeamPermission(payload.userId, id, 'member:remove');
+    const isSelf = member.userId === payload.id;
+    const canRemove = await checkTeamPermission(payload.id, id, 'member:remove');
 
     if (!isSelf && !canRemove) {
       return NextResponse.json(
@@ -179,7 +178,6 @@ export async function DELETE(
       message: isSelf ? 'You have left the team' : 'Member removed successfully',
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

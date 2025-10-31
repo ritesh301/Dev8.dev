@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch user
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.id },
       select: {
         id: true,
         email: true,
@@ -40,8 +40,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -57,19 +56,19 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     
     // Validate request
-    const { updateProfileSchema } = await import('@/lib/validations');
+    const { updateUserSchema: updateProfileSchema } = await import('@/lib/validations');
     const validation = updateProfileSchema.safeParse(body);
     
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
 
     // Update user
     const updatedUser = await prisma.user.update({
-      where: { id: payload.userId },
+      where: { id: payload.id },
       data: validation.data,
       select: {
         id: true,
@@ -88,8 +87,7 @@ export async function PATCH(request: NextRequest) {
     });
 
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -114,7 +112,7 @@ export async function DELETE(request: NextRequest) {
 
     // Get user and verify password
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.id },
     });
 
     if (!user || !user.password) {
@@ -153,7 +151,6 @@ export async function DELETE(request: NextRequest) {
     });
 
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

@@ -18,7 +18,7 @@ export async function GET(
     const { id } = await params;
 
     // Verify user is team member
-    const isMember = await isTeamMember(payload.userId, id);
+    const isMember = await isTeamMember(payload.id, id);
     if (!isMember) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'You are not a member of this team'),
@@ -138,7 +138,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

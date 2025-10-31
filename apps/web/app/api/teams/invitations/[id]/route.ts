@@ -33,8 +33,8 @@ export async function DELETE(
       where: { email: invitation.email },
     });
 
-    const isInvitedUser = user?.id === payload.userId;
-    const canInvite = await checkTeamPermission(payload.userId, invitation.teamId, 'member:invite');
+    const isInvitedUser = user?.id === payload.id;
+    const canInvite = await checkTeamPermission(payload.id, invitation.teamId, 'member:invite');
 
     if (!isInvitedUser && !canInvite) {
       return NextResponse.json(
@@ -53,7 +53,6 @@ export async function DELETE(
       message: isInvitedUser ? 'Invitation declined' : 'Invitation cancelled',
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

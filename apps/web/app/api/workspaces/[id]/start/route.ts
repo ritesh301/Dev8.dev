@@ -29,7 +29,7 @@ export async function POST(
     }
 
     // Verify ownership
-    if (environment.userId !== payload.userId) {
+    if (environment.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -70,7 +70,6 @@ export async function POST(
       },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

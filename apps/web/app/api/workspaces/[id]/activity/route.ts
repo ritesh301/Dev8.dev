@@ -30,7 +30,7 @@ export async function POST(
       );
     }
 
-    if (environment.userId !== payload.userId) {
+    if (environment.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -69,8 +69,7 @@ export async function POST(
       data: activity,
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -102,7 +101,7 @@ export async function GET(
       );
     }
 
-    if (environment.userId !== payload.userId) {
+    if (environment.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -135,7 +134,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

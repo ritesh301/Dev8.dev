@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const validation = acceptInvitationSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Verify the authenticated user matches the invitation email
-    if (!user || user.id !== payload.userId) {
+    if (!user || user.id !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'This invitation is for a different email address'),
         { status: 403 }
@@ -119,7 +119,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

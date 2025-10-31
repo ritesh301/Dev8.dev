@@ -1,15 +1,16 @@
-import NextAuth from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { createAuthConfig } from "./auth-config";
 import { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "./prisma";
 
-export const { handlers, auth, signIn, signOut } = NextAuth(createAuthConfig());
+// Export auth config for use in route handlers
+export const authConfig = createAuthConfig();
 
 // Unified authentication function that supports both NextAuth and JWT Bearer tokens
 export async function getAuthUser(req: NextRequest) {
   // Try NextAuth session first
-  const session = await auth();
+  const session = await getServerSession(authConfig);
   if (session?.user?.email) {
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
@@ -22,9 +23,9 @@ export async function getAuthUser(req: NextRequest) {
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
       const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
+        where: { id: decoded.id },
       });
       return user;
     } catch (error) {

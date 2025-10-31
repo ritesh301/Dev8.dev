@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }

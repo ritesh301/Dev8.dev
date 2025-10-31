@@ -34,7 +34,7 @@ export async function GET(
       );
     }
 
-    if (environment.userId !== payload.userId) {
+    if (environment.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -63,8 +63,7 @@ export async function GET(
       data: sshKeys,
     });
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 
@@ -85,7 +84,7 @@ export async function POST(
     const validation = addSSHKeySchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, 'Invalid input', validation.error.issues),
+        createErrorResponse(400, ErrorCodes.VALIDATION_ERROR, JSON.stringify(validation.error.issues)),
         { status: 400 }
       );
     }
@@ -102,7 +101,7 @@ export async function POST(
       );
     }
 
-    if (environment.userId !== payload.userId) {
+    if (environment.userId !== payload.id) {
       return NextResponse.json(
         createErrorResponse(403, ErrorCodes.FORBIDDEN, 'Access denied'),
         { status: 403 }
@@ -112,7 +111,7 @@ export async function POST(
     // Create or find SSH key
     const sshKey = await prisma.sSHKey.create({
       data: {
-        userId: payload.userId,
+        userId: payload.id,
         name: validation.data.name,
         publicKey: validation.data.publicKey,
         fingerprint: generateFingerprint(validation.data.publicKey),
@@ -139,8 +138,7 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
 

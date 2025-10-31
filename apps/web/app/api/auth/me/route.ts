@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch user
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.id },
       select: {
         id: true,
         email: true,
@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    const { response, status } = handleAPIError(error);
-    return NextResponse.json(response, { status });
+    return handleAPIError(error);
   }
 }
