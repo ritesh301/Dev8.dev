@@ -12,8 +12,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const payload = await requireAuth(request);
-    const { id } = await params;
+    await requireAuth(request);
+    await params;
 
     // Team functionality not yet implemented in database schema
     return NextResponse.json(
