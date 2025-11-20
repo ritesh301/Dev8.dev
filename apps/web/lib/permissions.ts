@@ -1,4 +1,5 @@
-import { prisma } from './prisma';
+// Team permissions - not yet implemented
+// Team functionality requires database schema changes
 
 export type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER';
 export type Permission = 
@@ -13,30 +14,26 @@ const rolePermissions: Record<TeamRole, Permission[]> = {
 };
 
 export async function getUserTeamRole(userId: string, teamId: string): Promise<TeamRole | null> {
-  const member = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId, teamId } },
-  });
-  return member?.role as TeamRole | null;
+  // Team features not yet implemented
+  return null;
 }
 
 export async function isTeamMember(userId: string, teamId: string): Promise<boolean> {
-  const role = await getUserTeamRole(userId, teamId);
-  return role !== null;
+  // Team features not yet implemented
+  return false;
 }
 
 export async function isTeamOwner(userId: string, teamId: string): Promise<boolean> {
-  const role = await getUserTeamRole(userId, teamId);
-  return role === 'OWNER';
+  // Team features not yet implemented
+  return false;
 }
 
 export async function isTeamAdmin(userId: string, teamId: string): Promise<boolean> {
-  const role = await getUserTeamRole(userId, teamId);
-  return role === 'OWNER' || role === 'ADMIN';
+  // Team features not yet implemented
+  return false;
 }
 
 export async function checkTeamPermission(userId: string, teamId: string, permission: Permission): Promise<boolean> {
-  const role = await getUserTeamRole(userId, teamId);
-  if (!role) return false;
-  const permissions = rolePermissions[role];
-  return permissions.includes(permission);
+  // Team features not yet implemented
+  return false;
 }
