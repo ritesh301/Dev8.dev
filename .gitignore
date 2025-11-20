@@ -38,7 +38,7 @@ yarn-error.log*
 *.pem
 
 # Go
-bin/
+**/bin/**
 *.exe
 *.exe~
 *.dll
@@ -47,8 +47,12 @@ bin/
 coverage.out
 tmp/
 
+# Go Agent binary
+apps/agent/agent
+
 # CI/CD artifacts
 *.tar.gz
 *.zip
 trivy-results.sarif
 gosec-results.sarif
+/in/

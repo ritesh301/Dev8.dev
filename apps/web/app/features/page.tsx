@@ -176,7 +176,7 @@ export default function FeaturesPage() {
               instant environments to enterprise-grade security.
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
-              <Button size="lg" className="h-12 px-8" onClick={() => router.push("/register")}>
+              <Button size="lg" className="h-12 px-8" onClick={() => router.push("/signup")}>
                 Start Using These Features
                 <ArrowLeft className="ml-2 h-4 w-4 rotate-180" />
               </Button>
