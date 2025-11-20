@@ -319,10 +319,7 @@ export default function Dashboard() {
                         variant="outline"
                         onClick={() => {
                           if (ws.vsCodeUrl) {
-                            // Azure Container Apps doesn't support :port in URLs, strip :8080
-                            const cleanUrl = ws.vsCodeUrl.replace(':8080', '');
-                            console.log('Opening VSCode:', cleanUrl, '(original:', ws.vsCodeUrl, ')');
-                            window.open(cleanUrl, '_blank');
+                            window.open(ws.vsCodeUrl, '_blank', 'noopener');
                           } else {
                             alert('VSCode URL not available. Please ensure workspace is running.');
                           }
