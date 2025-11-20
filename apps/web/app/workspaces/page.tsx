@@ -94,7 +94,10 @@ export default function WorkspacesPage() {
               />
             </div>
             <div className="flex items-center gap-4">
-              <Button onClick={() => router.push("/workspaces/new")} className="bg-gradient-to-r from-primary to-secondary">
+              <Button
+                onClick={() => router.push("/workspaces/new")}
+                className="bg-[#4da3ff] text-black hover:bg-[#70b6ff] focus-visible:ring-[#4da3ff]"
+              >
                 + New Workspace
               </Button>
               <button className="h-9 w-9 rounded-md bg-card border border-border flex items-center justify-center text-muted-foreground">🔔</button>
@@ -196,7 +199,11 @@ export default function WorkspacesPage() {
                   <Button variant="outline" onClick={() => router.back()}>
                     Cancel
                   </Button>
-                  <Button onClick={handleSave} disabled={saving} className="bg-gradient-to-r from-primary to-secondary">
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-[#4da3ff] text-black hover:bg-[#70b6ff] focus-visible:ring-[#4da3ff]"
+                  >
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Save Template
                   </Button>
