@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import {
   Cloud,
   LayoutDashboard,
-  Boxes,
   Bot,
   Settings,
   CreditCard,
@@ -29,7 +28,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Workspaces", href: "/workspaces", icon: Boxes },
   { title: "Ai Agents", href: "/ai-agents", icon: Bot },
   { title: "Settings", href: "/settings", icon: Settings },
   { title: "Billing/Usage", href: "/billing-usage", icon: CreditCard },
@@ -59,7 +57,7 @@ export function Sidebar({ className }: SidebarProps) {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-secondary glow-primary">
                 <Cloud className="h-5 w-5 text-black" />
               </div>
-              <span className="text-xl font-bold text-glow-primary">CloudIDEX</span>
+              <span className="text-xl font-bold text-glow-primary">Dev8</span>
             </Link>
           )}
           {collapsed && (

@@ -2,21 +2,115 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Activity,
-  Code,
-  GitBranch,
-  Terminal,
-  Zap,
-  TrendingUp,
-  Clock,
-  Loader2,
-} from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
+
+const WORKSPACE_STATUS_VALUES = [
+  "running",
+  "paused",
+  "stopped",
+  "creating",
+  "starting",
+  "stopping",
+  "deleting",
+  "error",
+] as const;
+
+type WorkspaceStatus = (typeof WORKSPACE_STATUS_VALUES)[number];
+type WorkspaceAction = "start" | "pause" | "stop" | "delete";
+
+type Workspace = {
+  id: string;
+  name: string;
+  status: WorkspaceStatus;
+  vsCodeUrl?: string | null;
+};
+
+type WorkspacePayload = {
+  id?: string | number;
+  name?: string;
+  status?: string;
+  vsCodeUrl?: string | null;
+};
+
+const ACTION_LABELS: Record<WorkspaceAction, string> = {
+  start: "Start",
+  pause: "Pause",
+  stop: "Stop",
+  delete: "Delete",
+};
+
+const ACTION_STYLES: Record<WorkspaceAction, string> = {
+  start: "border-green-500/30 text-green-500 hover:bg-green-500/10",
+  pause: "border-amber-500/30 text-amber-500 hover:bg-amber-500/10",
+  stop: "border-rose-500/30 text-rose-500 hover:bg-rose-500/10",
+  delete: "",
+};
+
+const STATUS_STYLES: Record<WorkspaceStatus, { label: string; color: string }> = {
+  running: { label: "Running", color: "text-green-500" },
+  paused: { label: "Paused", color: "text-amber-500" },
+  stopped: { label: "Stopped", color: "text-muted-foreground" },
+  creating: { label: "Creating", color: "text-blue-500" },
+  starting: { label: "Starting", color: "text-blue-500" },
+  stopping: { label: "Stopping", color: "text-amber-500" },
+  deleting: { label: "Deleting", color: "text-rose-500" },
+  error: { label: "Error", color: "text-rose-500" },
+};
+
+const normalizeStatus = (value?: string): WorkspaceStatus => {
+  const normalized = (value || "stopped").toLowerCase();
+  return WORKSPACE_STATUS_VALUES.includes(normalized as WorkspaceStatus)
+    ? (normalized as WorkspaceStatus)
+    : "stopped";
+};
+
+const PLACEHOLDER_WORKSPACES: Workspace[] = [
+  { id: "placeholder-1", name: "Loading...", status: "starting" },
+  { id: "placeholder-2", name: "Loading...", status: "starting" },
+  { id: "placeholder-3", name: "Loading...", status: "starting" },
+];
+
+const buildActionRequest = (workspaceId: string, action: WorkspaceAction) => {
+  switch (action) {
+    case "start":
+      return { endpoint: `/api/workspaces/${workspaceId}/start`, method: "POST" as const };
+    case "pause":
+      return { endpoint: `/api/workspaces/${workspaceId}/pause`, method: "POST" as const };
+    case "stop":
+      return { endpoint: `/api/workspaces/${workspaceId}/stop`, method: "POST" as const };
+    case "delete":
+      return { endpoint: `/api/workspaces/${workspaceId}`, method: "DELETE" as const };
+    default:
+      throw new Error("Unsupported action");
+  }
+};
+
+const isActionDisabled = (
+  action: WorkspaceAction,
+  status: WorkspaceStatus,
+  busyAction?: WorkspaceAction,
+) => {
+  if (busyAction) {
+    return true;
+  }
+
+  switch (action) {
+    case "start":
+      return ["running", "starting", "creating"].includes(status);
+    case "pause":
+      return status !== "running";
+    case "stop":
+      return !["running", "paused"].includes(status);
+    case "delete":
+      return status === "deleting";
+    default:
+      return false;
+  }
+};
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -31,32 +125,91 @@ export default function Dashboard() {
   }, [session, status, router]);
 
   // Workspace data hooks must be declared before any return to keep hook order stable
-  type Workspace = { id: string | number; name: string; status: "running" | "stopped" };
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loadingWs, setLoadingWs] = useState(true);
+  const [actionBusy, setActionBusy] = useState<Record<string, WorkspaceAction | undefined>>({});
+
+  const refreshWorkspaces = useCallback(async () => {
+    try {
+      const res = await fetch("/api/workspaces", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error("Failed to fetch workspaces");
+      }
+      const data = await res.json();
+      const payloads: WorkspacePayload[] = Array.isArray(data.workspaces) ? data.workspaces : [];
+      const normalized: Workspace[] = payloads.map((entry) => ({
+        id: String(entry.id ?? crypto.randomUUID()),
+        name: entry.name ?? "Workspace",
+        status: normalizeStatus(entry.status),
+        vsCodeUrl: entry.vsCodeUrl,
+      }));
+      setWorkspaces(normalized);
+    } catch (error) {
+      console.error("Failed to load workspaces:", error);
+    } finally {
+      setLoadingWs(false);
+    }
+  }, []);
+
+  const handleWorkspaceAction = useCallback(
+    async (workspace: Workspace, action: WorkspaceAction) => {
+      const key = workspace.id.toString();
+      setActionBusy((prev) => ({ ...prev, [key]: action }));
+
+      try {
+        if (action === "delete") {
+          const confirmed = window.confirm(
+            `Delete workspace "${workspace.name}"? This action cannot be undone.`,
+          );
+          if (!confirmed) {
+            setActionBusy((prev) => {
+              const next = { ...prev };
+              delete next[key];
+              return next;
+            });
+            return;
+          }
+        }
+
+        const { endpoint, method } = buildActionRequest(workspace.id, action);
+        const response = await fetch(endpoint, { method });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.message || payload?.error || `Failed to ${action} workspace`);
+        }
+
+        await refreshWorkspaces();
+      } catch (error) {
+        console.error(`Failed to ${action} workspace:`, error);
+        alert(`Failed to ${action} workspace: ${error instanceof Error ? error.message : "Unknown error"}`);
+      } finally {
+        setActionBusy((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }
+    },
+    [refreshWorkspaces],
+  );
 
   // Fetch dynamic workspaces and keep them fresh
   useEffect(() => {
+    if (!session) return;
+
     let timer: ReturnType<typeof setInterval> | undefined;
-    async function load() {
-      try {
-        const res = await fetch("/api/workspaces", { cache: "no-store" });
-        const j = await res.json();
-        setWorkspaces(j.workspaces ?? []);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoadingWs(false);
-      }
-    }
-    if (session) {
-      load();
-      timer = setInterval(load, 10000);
-    }
+
+    const bootstrap = async () => {
+      await refreshWorkspaces();
+      timer = setInterval(refreshWorkspaces, 10000);
+    };
+
+    bootstrap();
+
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [session]);
+  }, [session, refreshWorkspaces]);
 
   if (!mounted || status === "loading") {
     return (
@@ -113,115 +266,106 @@ export default function Dashboard() {
 
           {/* Workspace cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {(loadingWs ? [1,2,3].map(n => ({ id: n, name: "Loading...", status: "running" as const })) : workspaces).map((ws) => (
-              <Card key={ws.id} className="border-border bg-card/50 backdrop-blur">
-                <div className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground">{ws.name}</h3>
-                      <p className={`text-sm mt-1 ${ws.status === "running" ? "text-green-500" : "text-rose-500"}`}>
-                        {ws.status === "running" ? "Running" : "Stopped"}
+            {(loadingWs ? PLACEHOLDER_WORKSPACES : workspaces).map((ws) => {
+              const statusMeta = STATUS_STYLES[ws.status];
+              const busyAction = actionBusy[ws.id];
+              const isPlaceholder = ws.id.startsWith("placeholder-");
+              const disableConnections = isPlaceholder || ws.status !== "running" || Boolean(busyAction);
+
+              return (
+                <Card key={ws.id} className="border-border bg-card/50 backdrop-blur">
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground">{ws.name}</h3>
+                        <p className="text-xs text-muted-foreground">ID: {ws.id}</p>
+                      </div>
+                      <p className={`text-sm font-medium ${statusMeta.color}`}>
+                        {statusMeta.label}
                       </p>
                     </div>
-                  </div>
 
-                  <div className="h-px my-4 bg-border" />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {( ["start", "pause", "stop", "delete"] as WorkspaceAction[] ).map((action) => {
+                        const disabled = isPlaceholder || isActionDisabled(action, ws.status, busyAction);
+                        const isDelete = action === "delete";
+                        return (
+                          <Button
+                            key={action}
+                            size="sm"
+                            variant={isDelete ? "destructive" : "outline"}
+                            className={!isDelete ? `${ACTION_STYLES[action]} border` : undefined}
+                            disabled={disabled}
+                            onClick={() => {
+                              if (isPlaceholder) return;
+                              handleWorkspaceAction(ws, action);
+                            }}
+                          >
+                            {busyAction === action ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              ACTION_LABELS[action]
+                            )}
+                          </Button>
+                        );
+                      })}
+                    </div>
 
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <div className="flex items-center gap-4">
-                      <button onClick={() => router.push(`/workspaces/${ws.id}/ide`)} className="text-primary hover:underline">Open IDE</button>
-                      <button
+                    <div className="h-px my-4 bg-border" />
+
+                    <div className="mt-4 flex items-center justify-between gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (ws.vsCodeUrl) {
+                            // Azure Container Apps doesn't support :port in URLs, strip :8080
+                            const cleanUrl = ws.vsCodeUrl.replace(':8080', '');
+                            console.log('Opening VSCode:', cleanUrl, '(original:', ws.vsCodeUrl, ')');
+                            window.open(cleanUrl, '_blank');
+                          } else {
+                            alert('VSCode URL not available. Please ensure workspace is running.');
+                          }
+                        }}
+                        className="flex-1"
+                        disabled={disableConnections || !ws.vsCodeUrl}
+                        title="Open VSCode in browser"
+                      >
+                        Open VSCode
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={async () => {
                           try {
-                            const endpoint = ws.status === 'running' 
-                              ? `/api/workspaces/${ws.id}/stop` 
-                              : `/api/workspaces/${ws.id}/start`;
-                            const res = await fetch(endpoint, { method: 'POST' });
+                            const res = await fetch(`/api/workspaces/${ws.id}/details`);
                             if (res.ok) {
-                              // Reload workspaces
-                              const wsRes = await fetch("/api/workspaces", { cache: "no-store" });
-                              const j = await wsRes.json();
-                              setWorkspaces(j.workspaces ?? []);
-                            }
-                          } catch (e) {
-                            console.error('Failed to toggle workspace:', e);
-                          }
-                        }}
-                        className="hover:underline"
-                      >
-                        {ws.status === 'running' ? 'Stop' : 'Start'}
-                      </button>
-                      <button
-                        onClick={async () => { 
-                          try {
-                            const res = await fetch(`/api/workspaces/${ws.id}/clone`, { method: 'POST' });
-                            if (res.ok) {
-                              // Reload workspaces to show the new clone
-                              const wsRes = await fetch("/api/workspaces", { cache: "no-store" });
-                              const j = await wsRes.json();
-                              setWorkspaces(j.workspaces ?? []);
-                              alert('Workspace cloned successfully!');
+                              const data = await res.json();
+                              const sshUrl = data.sshUrl || data.sshURL;
+                              if (sshUrl) {
+                                await navigator.clipboard.writeText(sshUrl);
+                                alert('SSH URL copied to clipboard!');
+                              } else {
+                                alert('SSH URL not available');
+                              }
                             } else {
-                              const error = await res.json();
-                              alert(`Failed to clone workspace: ${error.message || 'Unknown error'}`);
+                              alert('Failed to fetch workspace details');
                             }
                           } catch (e) {
-                            console.error('Failed to clone workspace:', e);
-                            alert('Failed to clone workspace');
+                            console.error('Failed to copy SSH:', e);
+                            alert('Failed to copy SSH URL');
                           }
                         }}
-                        className="hover:underline"
+                        className="flex-1"
+                        disabled={disableConnections}
                       >
-                        Clone
-                      </button>
-                      <button
-                        onClick={async () => { 
-                          if (!confirm(`Are you sure you want to delete "${ws.name}"?`)) return;
-                          try {
-                            const res = await fetch(`/api/workspaces/${ws.id}`, { method: 'DELETE' });
-                            if (res.ok) {
-                              // Remove from list
-                              setWorkspaces(workspaces.filter(w => w.id !== ws.id));
-                            } else {
-                              alert('Failed to delete workspace');
-                            }
-                          } catch (e) {
-                            console.error('Failed to delete workspace:', e);
-                            alert('Failed to delete workspace');
-                          }
-                        }}
-                        className="text-rose-500 hover:underline"
-                      >
-                        Delete
-                      </button>
+                        Copy SSH
+                      </Button>
                     </div>
-                    <div className="text-xs text-muted-foreground">&nbsp;</div>
                   </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {/* Two panels below */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="border-border bg-card/50 px-4 py-6">
-              <h3 className="text-lg font-semibold">Create a Custom Template</h3>
-              <p className="text-sm text-muted-foreground mt-2">Build a base environment with your preferred tools and dotfiles.</p>
-              <div className="mt-4">
-                <Button onClick={() => router.push('/templates/new')} className="bg-gradient-to-r from-primary to-secondary">
-                  Build Template
-                </Button>
-              </div>
-            </Card>
-
-            <Card className="border-border bg-card/50 px-4 py-6">
-              <h3 className="text-lg font-semibold">Start from a Repository</h3>
-              <p className="text-sm text-muted-foreground mt-2">Create a new workspace directly from a Git repository URL.</p>
-              <div className="mt-4 flex gap-2">
-                <input placeholder="Paste a Git Repository URL..." className="flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground" />
-                <Button variant="outline" disabled className="opacity-60">Create</Button>
-              </div>
-            </Card>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </main>

@@ -28,7 +28,7 @@ export async function getAuthUser(req: NextRequest) {
         where: { id: decoded.id },
       });
       return user;
-    } catch (error) {
+    } catch {
       return null;
     }
   }

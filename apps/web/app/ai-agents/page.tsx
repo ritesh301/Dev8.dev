@@ -8,7 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Bot, ServerCog, Loader2, CheckCircle2, XCircle, CircleDot } from "lucide-react";
+import { Bot, ServerCog, Loader2 } from "lucide-react";
+
+
 
 interface Agent {
   id: string;

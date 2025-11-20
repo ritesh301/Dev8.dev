@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 // In-memory dynamic data to simulate real-time updates
-let state = {
+const state = {
   monthTotal: 4820,
   computeCost: 3200,
   storageCost: 950,

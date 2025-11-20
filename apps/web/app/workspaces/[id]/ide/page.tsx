@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
@@ -58,7 +58,8 @@ export default function WorkspaceIDEPage() {
     if (!session) router.push("/signin");
   }, [status, session, router]);
 
-  async function loadAll(signal?: AbortSignal) {
+  const loadAll = useCallback(async (signal?: AbortSignal) => {
+    if (!id) return;
     try {
       const [d, m, t, s] = await Promise.all([
         fetch(`/api/workspaces/${id}/details`, { cache: "no-store", signal }).then(async (r) => {
@@ -84,25 +85,24 @@ export default function WorkspaceIDEPage() {
       setSnapshots(Array.isArray(s?.snapshots) ? s.snapshots : []);
     } catch (e: unknown) {
       // Ignore abort errors caused by effect cleanup or route changes
-      const name = (e as any)?.name || '';
-      if (name === 'AbortError' || e instanceof DOMException) return;
-      console.error('IDE loadAll error', e);
+      const error = e as { name?: string };
+      if (error?.name === "AbortError" || (typeof DOMException !== "undefined" && e instanceof DOMException)) return;
+      console.error("IDE loadAll error", e);
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
     if (!id || status !== "authenticated") return;
     const controller = new AbortController();
-    let timer: ReturnType<typeof setInterval> | undefined;
     loadAll(controller.signal);
-    timer = setInterval(() => loadAll(controller.signal), 5000);
+    const timer = setInterval(() => loadAll(controller.signal), 5000);
     return () => {
       controller.abort();
-      if (timer) clearInterval(timer);
+      clearInterval(timer);
     };
-  }, [id, status]);
+  }, [id, status, loadAll]);
 
   async function doAction(action: "start" | "stop" | "restart") {
     setActing(action);
@@ -140,7 +140,8 @@ export default function WorkspaceIDEPage() {
       const formatted = await prettier.format(code, { parser, plugins });
       setCode(formatted);
     } catch (e) {
-      appendTerminal(`format error: ${String((e as any)?.message || e)}`);
+      const message = e instanceof Error ? e.message : String(e);
+      appendTerminal(`format error: ${message}`);
     }
   }
 
@@ -185,7 +186,7 @@ export default function WorkspaceIDEPage() {
                     <span className="text-muted-foreground">Language</span>
                     <select
                       value={language}
-                      onChange={(e) => setLanguage(e.target.value as any)}
+                      onChange={(e) => setLanguage(e.target.value === "typescript" ? "typescript" : "javascript")}
                       className="h-7 rounded border border-border bg-background px-2 text-xs"
                     >
                       <option value="javascript">JavaScript</option>

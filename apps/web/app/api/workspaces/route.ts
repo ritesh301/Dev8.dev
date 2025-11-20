@@ -5,10 +5,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { EnvironmentStatus } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { createWorkspaceSchema } from '@/lib/validations';
 import { handleAPIError, createErrorResponse, ErrorCodes } from '@/lib/errors';
+import {
+  isAgentAvailable,
+  createEnvironment,
+  isAgentIntegrationEnabled,
+} from '@/lib/agent';
 
 /**
  * GET /api/workspaces
@@ -27,12 +34,16 @@ export async function GET(request: NextRequest) {
     const order = searchParams.get('order') || 'desc';
 
     // Build where clause
-    const where: any = {
+    const where: Prisma.EnvironmentWhereInput = {
       userId: payload.id,
+      deletedAt: null,
     };
 
     if (status) {
-      where.status = status;
+      const normalized = status.toUpperCase() as keyof typeof EnvironmentStatus;
+      if (EnvironmentStatus[normalized]) {
+        where.status = EnvironmentStatus[normalized];
+      }
     }
 
     if (region) {
@@ -70,6 +81,7 @@ export async function GET(request: NextRequest) {
       memoryGB: env.memoryGB,
       storageGB: env.storageGB,
       baseImage: env.baseImage,
+      vsCodeUrl: env.vsCodeUrl, // Include VSCode URL for direct access
       createdAt: env.createdAt,
       updatedAt: env.updatedAt,
     }));
@@ -109,9 +121,12 @@ export async function POST(request: NextRequest) {
 
     const data = validation.data;
 
-    // Check user's workspace quota (example: max 10)
+    // Check user's workspace quota (example: max 10 active workspaces)
     const existingCount = await prisma.environment.count({
-      where: { userId: payload.id },
+      where: { 
+        userId: payload.id,
+        deletedAt: null, // Only count non-deleted workspaces
+      },
     });
 
     if (existingCount >= 10) {
@@ -121,34 +136,90 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create environment record in database
-    // For MVP: Create workspace directly without Agent API integration
+    // Create environment record in database first
     const environment = await prisma.environment.create({
       data: {
         userId: payload.id,
         name: data.name,
-        status: 'STOPPED', // Start as STOPPED until Agent API is available
-        cloudProvider: 'AZURE',
+        status: 'STOPPED', // Will update to RUNNING if Agent API provisions successfully
+        cloudProvider: data.cloudProvider,
         cloudRegion: data.cloudRegion,
         cpuCores: data.cpuCores,
         memoryGB: data.memoryGB,
         storageGB: data.storageGB,
         baseImage: data.baseImage,
         ideType: 'VSCODE',
-        agentType: 'NONE',
+        agentType: 'NONE', // AI agent type - separate from container provisioning
       },
     });
 
-    // TODO: Integrate with Agent API when available
-    // For now, return the workspace immediately for frontend testing
-    // The user can manually start it later when Agent API is running
+    // Check if Agent API is available and provision Azure container
+    let agentProvisioned = false;
+    let provisionError = null;
+
+    if (isAgentIntegrationEnabled()) {
+      const agentHealthy = await isAgentAvailable();
+      if (!agentHealthy) {
+        console.warn('[Agent API] Health probe failed; attempting provisioning anyway.');
+      }
+      try {
+        console.log(`[Agent API] Provisioning workspace ${environment.id} via Agent API...`);
+        
+        const agentEnvironment = await createEnvironment({
+          workspaceId: environment.id,
+          name: data.name,
+          userId: payload.id,
+          cloudProvider: data.cloudProvider,
+          cloudRegion: data.cloudRegion,
+          cpuCores: data.cpuCores,
+          memoryGB: data.memoryGB,
+          storageGB: data.storageGB,
+          baseImage: data.baseImage,
+        });
+
+        console.log(`[Agent API] Successfully provisioned workspace ${environment.id}`);
+        console.log(`[Agent API] VSCode URL: ${agentEnvironment.connectionUrls.vscodeWebUrl}`);
+
+        // Update environment with real Azure URLs and container info
+        await prisma.environment.update({
+          where: { id: environment.id },
+          data: {
+            vsCodeUrl: agentEnvironment.connectionUrls.vscodeWebUrl,
+            sshConnectionString: agentEnvironment.connectionUrls.sshUrl,
+            azureFileShareName: agentEnvironment.azureFileShare,
+            aciContainerGroupId: agentEnvironment.azureContainerGroup,
+            status: 'RUNNING',
+          },
+        });
+
+        agentProvisioned = true;
+      } catch (error) {
+        console.error(`[Agent API] Failed to provision workspace ${environment.id}:`, error);
+        provisionError = error instanceof Error ? error.message : 'Unknown error';
+        // Continue without Agent provisioning - workspace record still exists
+      }
+    } else {
+      console.log('[Agent API] Integration disabled - workspace created without Azure container');
+    }
+
+    // Fetch updated environment to return
+    const finalEnvironment = await prisma.environment.findUnique({
+      where: { id: environment.id },
+    });
 
     return NextResponse.json(
       {
         success: true,
         data: {
-          environment,
-          message: 'Workspace created successfully. Start it when ready.',
+          environment: finalEnvironment,
+          agentProvisioned,
+          message: agentProvisioned
+            ? 'Workspace created and Azure container provisioned successfully'
+            : provisionError
+            ? `Workspace created but Agent provisioning failed: ${provisionError}`
+            : isAgentIntegrationEnabled()
+            ? 'Workspace created. Agent API not reachable - start manually when ready.'
+            : 'Workspace created. Agent API is disabled - start manually when ready.',
         },
       },
       { status: 201 }

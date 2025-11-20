@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { changePasswordSchema } from '@/lib/validations';
 import { requireAuth } from '@/lib/auth';
 import { hashPassword, verifyPassword, validatePasswordStrength } from '@/lib/jwt';
-import { handleAPIError, createErrorResponse, ErrorCodes, APIError } from '@/lib/errors';
+import { handleAPIError, createErrorResponse, ErrorCodes } from '@/lib/errors';
 
 export async function POST(request: NextRequest) {
   try {

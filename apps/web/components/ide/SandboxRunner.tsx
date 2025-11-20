@@ -24,7 +24,7 @@ export const SandboxRunner = React.forwardRef<SandboxRunnerHandle, SandboxRunner
         // For TS, we transpile with a naive approach: strip types via a tiny regex as a placeholder.
         // For production, use a real transpiler like sucrase or swc in a web worker.
         const js = language === "typescript" ? code.replace(/:\s*[^=;,)]+/g, "") : code;
-        const html = `<!doctype html><html><head><meta charset=\"utf-8\" /><style>body{font:12px monospace;color:#e2e8f0;background:#0f172a;padding:8px}</style></head><body><script>
+        const html = `<!doctype html><html><head><meta charset="utf-8" /><style>body{font:12px monospace;color:#e2e8f0;background:#0f172a;padding:8px}</style></head><body><script>
           const send = (type, args) => parent.postMessage({ type, args }, '*');
           const origLog = console.log, origErr = console.error;
           console.log = (...a) => { send('log', a.map(x=>String(x))); origLog(...a); };
@@ -32,7 +32,7 @@ export const SandboxRunner = React.forwardRef<SandboxRunnerHandle, SandboxRunner
           try { 
             ${js}
           } catch (e) { console.error(e && e.stack ? e.stack : String(e)); }
-        <\/script></body></html>`;
+        </script></body></html>`;
         iframe.srcdoc = html;
       },
       clear() {

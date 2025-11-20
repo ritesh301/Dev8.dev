@@ -5,7 +5,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     // TODO: persist to database/service
     return NextResponse.json({ ok: true, template: body }, { status: 201 });
-  } catch (err) {
+  } catch {
     return NextResponse.json({ ok: false, error: "Invalid request" }, { status: 400 });
   }
 }

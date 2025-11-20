@@ -1,35 +1,53 @@
 import { NextResponse } from "next/server";
+import { getWorkspaceOptions, SUPPORTED_PROVIDER_ID } from "@/lib/workspace-options";
+import type { HardwarePresetId } from "@/lib/workspace-options";
 
 type Body = {
-  provider: string;
-  size: "small" | "medium" | "large";
-  region?: string;
-  hoursPerDay?: number; // optional usage for estimate
+  sizeId?: string;
+  size?: string; // backward compatibility
+  hoursPerDay?: number;
 };
 
-const BASE_PRICING = {
-  aws: { small: 0.07, medium: 0.16, large: 0.36 },
-  gcp: { small: 0.065, medium: 0.15, large: 0.34 },
-  azure: { small: 0.075, medium: 0.17, large: 0.38 },
-  local: { small: 0.02, medium: 0.05, large: 0.1 },
-} as const; // USD per hour
+const options = getWorkspaceOptions();
+const DEFAULT_SIZE_ID = options.defaults.sizeId as HardwarePresetId;
 
 export async function POST(req: Request) {
   const body = (await req.json()) as Body;
-  const provider = (body.provider || "aws") as keyof typeof BASE_PRICING;
-  const size = (body.size || "small") as keyof (typeof BASE_PRICING)["aws"];
-  const hrs = typeof body.hoursPerDay === "number" ? Math.max(0, Math.min(24, body.hoursPerDay)) : 8;
+  const requestedSize = (body.sizeId || body.size || DEFAULT_SIZE_ID) as HardwarePresetId;
+  const preset =
+    options.sizes.find((s) => s.id === requestedSize) ??
+    options.sizes.find((s) => s.id === DEFAULT_SIZE_ID) ??
+    options.sizes[0];
 
-  const hourly = BASE_PRICING[provider][size];
-  const daily = hourly * hrs;
-  const monthly = daily * 30;
-  const currency = "USD";
+  if (!preset) {
+    return NextResponse.json(
+      { error: { message: "No hardware presets available" } },
+      { status: 500 }
+    );
+  }
+
+  const sizeId = preset.id;
+  const hoursPerDay = clamp(body.hoursPerDay ?? 8, 0, 24);
+
+  const hourly = Number(preset.costPerHour.toFixed(4));
+  const daily = Number((hourly * hoursPerDay).toFixed(4));
+  const monthly = Number((daily * 30).toFixed(2));
 
   return NextResponse.json({
-    provider,
-    size,
-    hoursPerDay: hrs,
-    cost: { hourly, daily, monthly, currency },
+    provider: SUPPORTED_PROVIDER_ID,
+    sizeId,
+    hardware: preset,
+    hoursPerDay,
+    cost: {
+      hourly,
+      daily,
+      monthly,
+      currency: "USD",
+    },
     updatedAt: Date.now(),
   });
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }

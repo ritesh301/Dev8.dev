@@ -18,20 +18,8 @@ export default function Profile() {
     }
   }, [session, status, router]);
 
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return null;
-  }
-
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | undefined;
+    if (status !== "authenticated") return;
     async function load() {
       try {
         const r = await fetch("/api/account/connections", { cache: "no-store" });
@@ -44,12 +32,22 @@ export default function Profile() {
         console.error("profile: connections fetch error", e);
       }
     }
-    if (status === "authenticated") {
-      load();
-      timer = setInterval(load, 8000);
-    }
-    return () => { if (timer) clearInterval(timer); };
+    load();
+    const timer = setInterval(load, 8000);
+    return () => clearInterval(timer);
   }, [status]);
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

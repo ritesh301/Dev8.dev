@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { handleAPIError, createErrorResponse, ErrorCodes } from '@/lib/errors';
@@ -11,11 +12,11 @@ import { isTeamMember } from '@/lib/permissions';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const payload = await requireAuth(request);
-    const { id } = await params;
+    const { id } = params;
     const { searchParams } = new URL(request.url);
     
     const startDate = searchParams.get('startDate');
@@ -32,16 +33,17 @@ export async function GET(
       );
     }
 
-    const where: any = {
+    const where: Prisma.ResourceUsageWhereInput = {
       environment: {
         teamId: id,
       },
     };
 
     if (startDate || endDate) {
-      where.timestamp = {};
-      if (startDate) where.timestamp.gte = new Date(startDate);
-      if (endDate) where.timestamp.lte = new Date(endDate);
+      const timestampFilter: Prisma.DateTimeFilter = {};
+      if (startDate) timestampFilter.gte = new Date(startDate);
+      if (endDate) timestampFilter.lte = new Date(endDate);
+      where.timestamp = timestampFilter;
     }
 
     const activities = await prisma.resourceUsage.findMany({

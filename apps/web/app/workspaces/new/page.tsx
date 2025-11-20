@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
@@ -8,13 +8,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import type {
+  BaseImageId,
+  HardwarePresetId,
+  HardwarePresetOption,
+  ProviderOption,
+  RegionId,
+  WorkspaceOptions,
+} from "@/lib/workspace-options";
+import { SUPPORTED_CLOUD_PROVIDER } from "@/lib/workspace-options";
 
-type Options = {
-  providers: { id: string; name: string }[];
-  images: { id: string; label: string }[];
-  sizes: { id: "small" | "medium" | "large"; cpu: number; ramGb: number }[];
-  regions: { id: string; label: string }[];
+type WorkspaceOptionsResponse = WorkspaceOptions;
+
+type CostEstimate = {
+  provider: string;
+  sizeId: HardwarePresetId;
+  hardware: HardwarePresetOption;
+  hoursPerDay: number;
+  cost: {
+    hourly: number;
+    daily: number;
+    monthly: number;
+    currency: string;
+  };
+  updatedAt: number;
 };
 
 export default function NewWorkspacePage() {
@@ -27,25 +46,29 @@ export default function NewWorkspacePage() {
     if (!session) router.push("/signin");
   }, [session, status, router]);
 
-  const [options, setOptions] = useState<Options | null>(null);
+  const [options, setOptions] = useState<WorkspaceOptionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const [name, setName] = useState("");
-  const [provider, setProvider] = useState("aws");
-  const [image, setImage] = useState("ubuntu-22");
-  const [size, setSize] = useState<"small" | "medium" | "large">("small");
-  const [region, setRegion] = useState("us-east");
+  const [providerId, setProviderId] = useState<ProviderOption["id"] | "">("");
+  const [regionId, setRegionId] = useState<RegionId | "">("");
+  const [sizeId, setSizeId] = useState<HardwarePresetId | "">("");
+  const [imageId, setImageId] = useState<BaseImageId | "">("");
   const [hoursPerDay, setHoursPerDay] = useState(8);
 
-  const [estimate, setEstimate] = useState<{ hourly: number; daily: number; monthly: number; currency: string } | null>(null);
+  const [estimate, setEstimate] = useState<CostEstimate | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch("/api/workspaces/options", { cache: "no-store" });
-        const j = (await res.json()) as Options;
-        setOptions(j);
+        const data = (await res.json()) as WorkspaceOptionsResponse;
+        setOptions(data);
+        setProviderId(data.defaults.providerId);
+        setRegionId(data.defaults.regionId as RegionId);
+        setSizeId(data.defaults.sizeId as HardwarePresetId);
+        setImageId(data.defaults.imageId as BaseImageId);
       } finally {
         setLoading(false);
       }
@@ -54,39 +77,55 @@ export default function NewWorkspacePage() {
   }, []);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (!sizeId) return;
     async function calc() {
       try {
         const res = await fetch("/api/workspaces/estimate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, size, hoursPerDay }),
+          body: JSON.stringify({ sizeId, hoursPerDay }),
         });
-        const j = await res.json();
-        setEstimate(j.cost);
+        const j = (await res.json()) as CostEstimate;
+        setEstimate(j);
       } catch (e) {
         console.error(e);
+        setEstimate(null);
       }
     }
     // debounce quick changes
-    timer = setTimeout(calc, 200);
-    return () => timer && clearTimeout(timer);
-  }, [provider, size, hoursPerDay]);
+    const timer = setTimeout(calc, 200);
+    return () => clearTimeout(timer);
+  }, [sizeId, hoursPerDay]);
+
+  const selectedProvider = useMemo(
+    () => options?.providers.find((p) => p.id === providerId),
+    [options, providerId]
+  );
+  const selectedSize = useMemo(
+    () => options?.sizes.find((s) => s.id === sizeId),
+    [options, sizeId]
+  );
+  const selectedImage = useMemo(
+    () => options?.images.find((img) => img.id === imageId),
+    [options, imageId]
+  );
 
   async function onSubmit() {
+    if (!options || !selectedSize || !selectedImage || !regionId) {
+      alert("Workspace options are still loading. Please wait a moment.");
+      return;
+    }
     setSubmitting(true);
     try {
-      // Map size to actual resource values
-      const sizeConfig = options?.sizes.find(s => s.id === size) || { cpu: 2, ramGb: 4 };
-      
+      const storageGB = selectedSize.storageGB;
       const payload = {
         name,
-        cloudProvider: provider.toUpperCase(), // Convert to uppercase: AWS, GCP, AZURE, LOCAL
-        cloudRegion: region,
-        cpuCores: sizeConfig.cpu,
-        memoryGB: sizeConfig.ramGb,
-        storageGB: 20, // Default storage
-        baseImage: image,
+        cloudProvider: selectedProvider?.value ?? SUPPORTED_CLOUD_PROVIDER,
+        cloudRegion: regionId,
+        cpuCores: selectedSize.cpuCores,
+        memoryGB: selectedSize.memoryGB,
+        storageGB,
+        baseImage: selectedImage.id,
       };
 
       const response = await fetch("/api/workspaces", {
@@ -145,17 +184,28 @@ export default function NewWorkspacePage() {
                     <Input id="name" placeholder="e.g. api-backend-dev" value={name} onChange={(e) => setName(e.target.value)} />
                   </div>
                   <div>
-                    <Label htmlFor="provider">Provider</Label>
-                    <select
-                      id="provider"
-                      className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                      value={provider}
-                      onChange={(e) => setProvider(e.target.value)}
-                    >
+                    <Label>Provider</Label>
+                    <div className="mt-2 grid grid-cols-1 gap-3">
                       {options?.providers.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setProviderId(p.id)}
+                          className={`flex w-full flex-col rounded-lg border p-4 text-left transition ${
+                            providerId === p.id ? "border-primary bg-primary/10" : "border-border bg-card"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-sm">{p.label}</span>
+                            <Badge variant={p.status === "online" ? "default" : "secondary"}>{p.status === "online" ? "Live" : "Planned"}</Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">{p.description}</p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Region: {p.regions.map((region) => region.label).join(", ")}
+                          </p>
+                        </button>
                       ))}
-                    </select>
+                    </div>
                   </div>
                 </div>
 
@@ -165,13 +215,16 @@ export default function NewWorkspacePage() {
                     <select
                       id="image"
                       className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                      value={image}
-                      onChange={(e) => setImage(e.target.value)}
+                      value={imageId}
+                      onChange={(e) => setImageId(e.target.value as BaseImageId)}
                     >
                       {options?.images.map((img) => (
                         <option key={img.id} value={img.id}>{img.label}</option>
                       ))}
                     </select>
+                    {selectedImage && (
+                      <p className="mt-2 text-xs text-muted-foreground">{selectedImage.description}</p>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <Label>Size</Label>
@@ -179,34 +232,57 @@ export default function NewWorkspacePage() {
                       {options?.sizes.map((s) => (
                         <Button
                           key={s.id}
-                          variant={size === s.id ? "default" : "outline"}
-                          onClick={() => setSize(s.id)}
-                          className={(size === s.id ? "bg-gradient-to-r from-primary to-secondary " : "") + "whitespace-nowrap shrink-0"}
+                          type="button"
+                          variant={sizeId === s.id ? "default" : "outline"}
+                          onClick={() => setSizeId(s.id)}
+                          className={`${sizeId === s.id ? "bg-gradient-to-r from-primary to-secondary" : ""} whitespace-nowrap shrink-0`}
                         >
-                          {s.id.toUpperCase()} • {s.cpu} CPU / {s.ramGb} GB
+                          {s.label} • {s.cpuCores} CPU / {s.memoryGB} GB
                         </Button>
                       ))}
                     </div>
+                    {selectedSize && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {selectedSize.storageGB} GB SSD • {selectedSize.instanceType.replace('-', ' ')} • ${selectedSize.costPerHour.toFixed(2)}/hr
+                      </p>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <Label htmlFor="region">Region</Label>
                     <select
                       id="region"
                       className="mt-2 w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                      value={region}
-                      onChange={(e) => setRegion(e.target.value)}
+                      value={regionId}
+                      onChange={(e) => setRegionId(e.target.value as RegionId)}
                     >
                       {options?.regions.map((r) => (
                         <option key={r.id} value={r.id}>{r.label}</option>
                       ))}
                     </select>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Deployments currently run from Azure Central India (Pune) for the lowest latency in the region.
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="hours">Expected Usage (hrs/day)</Label>
-                    <Input id="hours" type="number" min={0} max={24} value={hoursPerDay} onChange={(e) => setHoursPerDay(Number(e.target.value))} />
+                    <Input
+                      id="hours"
+                      type="number"
+                      min={0}
+                      max={24}
+                      value={hoursPerDay}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isNaN(next)) {
+                          setHoursPerDay(0);
+                          return;
+                        }
+                        setHoursPerDay(Math.min(24, Math.max(0, next)));
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -225,10 +301,10 @@ export default function NewWorkspacePage() {
               <CardContent>
                 {estimate ? (
                   <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between"><span>Hourly</span><span className="font-semibold">{estimate.currency} {estimate.hourly.toFixed(2)}</span></div>
-                    <div className="flex items-center justify-between"><span>Daily</span><span className="font-semibold">{estimate.currency} {estimate.daily.toFixed(2)}</span></div>
-                    <div className="flex items-center justify-between"><span>Monthly</span><span className="font-semibold">{estimate.currency} {estimate.monthly.toFixed(2)}</span></div>
-                    <p className="text-xs text-muted-foreground mt-3">Estimates depend on actual usage and provider rates.</p>
+                    <div className="flex items-center justify-between"><span>Hourly</span><span className="font-semibold">{estimate.cost.currency} {estimate.cost.hourly.toFixed(2)}</span></div>
+                    <div className="flex items-center justify-between"><span>Daily</span><span className="font-semibold">{estimate.cost.currency} {estimate.cost.daily.toFixed(2)}</span></div>
+                    <div className="flex items-center justify-between"><span>Monthly</span><span className="font-semibold">{estimate.cost.currency} {estimate.cost.monthly.toFixed(2)}</span></div>
+                    <p className="text-xs text-muted-foreground mt-3">Azure costs are estimated with persistent volumes. Actual billing depends on runtime.</p>
                   </div>
                 ) : (
                   <div className="text-sm text-muted-foreground">Adjust options to see cost estimate.</div>

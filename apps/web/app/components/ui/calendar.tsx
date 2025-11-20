@@ -11,6 +11,52 @@ import { DayButton, DayPicker, getDefaultClassNames } from 'react-day-picker'
 import { cn } from '@/lib/utils'
 import { Button, buttonVariants } from '@/components/ui/button'
 
+type DayPickerCustomComponents = NonNullable<
+  React.ComponentProps<typeof DayPicker>['components']
+>
+
+type RootProps = NonNullable<DayPickerCustomComponents['Root']> extends (
+  ...args: infer A
+) => unknown
+  ? A[0]
+  : never
+
+type ChevronProps = NonNullable<DayPickerCustomComponents['Chevron']> extends (
+  ...args: infer A
+) => unknown
+  ? A[0]
+  : never
+
+type WeekNumberProps = NonNullable<DayPickerCustomComponents['WeekNumber']> extends (
+  ...args: infer A
+) => unknown
+  ? A[0]
+  : never
+
+const CalendarRoot = ({ className, rootRef, ...props }: RootProps) => (
+  <div data-slot="calendar" ref={rootRef} className={cn(className)} {...props} />
+)
+
+const CalendarChevron = ({ className, orientation, ...props }: ChevronProps) => {
+  if (orientation === 'left') {
+    return <ChevronLeftIcon className={cn('size-4', className)} {...props} />
+  }
+
+  if (orientation === 'right') {
+    return <ChevronRightIcon className={cn('size-4', className)} {...props} />
+  }
+
+  return <ChevronDownIcon className={cn('size-4', className)} {...props} />
+}
+
+const CalendarWeekNumber = ({ children, ...props }: WeekNumberProps) => (
+  <td {...props}>
+    <div className="flex size-(--cell-size) items-center justify-center text-center">
+      {children}
+    </div>
+  </td>
+)
+
 function Calendar({
   className,
   classNames,
@@ -125,46 +171,10 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        Root: ({ className, rootRef, ...props }) => {
-          return (
-            <div
-              data-slot="calendar"
-              ref={rootRef}
-              className={cn(className)}
-              {...props}
-            />
-          )
-        },
-        Chevron: ({ className, orientation, ...props }) => {
-          if (orientation === 'left') {
-            return (
-              <ChevronLeftIcon className={cn('size-4', className)} {...props} />
-            )
-          }
-
-          if (orientation === 'right') {
-            return (
-              <ChevronRightIcon
-                className={cn('size-4', className)}
-                {...props}
-              />
-            )
-          }
-
-          return (
-            <ChevronDownIcon className={cn('size-4', className)} {...props} />
-          )
-        },
+        Root: CalendarRoot,
+        Chevron: CalendarChevron,
         DayButton: CalendarDayButton,
-        WeekNumber: ({ children, ...props }) => {
-          return (
-            <td {...props}>
-              <div className="flex size-(--cell-size) items-center justify-center text-center">
-                {children}
-              </div>
-            </td>
-          )
-        },
+        WeekNumber: CalendarWeekNumber,
         ...components,
       }}
       {...props}

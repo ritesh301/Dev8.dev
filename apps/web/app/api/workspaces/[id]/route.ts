@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { updateWorkspaceSchema } from '@/lib/validations';
 import { handleAPIError, createErrorResponse, ErrorCodes } from '@/lib/errors';
+import { performWorkspaceAction } from '@/lib/workspace-actions';
 
 /**
  * GET /api/workspaces/[id]
@@ -37,7 +38,7 @@ export async function GET(
       },
     });
 
-    if (!environment) {
+    if (!environment || environment.deletedAt) {
       return NextResponse.json(
         createErrorResponse(404, ErrorCodes.NOT_FOUND, 'Workspace not found'),
         { status: 404 }
@@ -94,7 +95,7 @@ export async function PATCH(
       where: { id },
     });
 
-    if (!environment) {
+    if (!environment || environment.deletedAt) {
       return NextResponse.json(
         createErrorResponse(404, ErrorCodes.NOT_FOUND, 'Workspace not found'),
         { status: 404 }
@@ -156,15 +157,23 @@ export async function DELETE(
       );
     }
 
-    // For MVP: Simply delete from database without Agent API
-    // TODO: Integrate with Agent API to clean up cloud resources
-    await prisma.environment.delete({
-      where: { id },
+    if (environment.deletedAt) {
+      return NextResponse.json(
+        createErrorResponse(404, ErrorCodes.NOT_FOUND, 'Workspace already deleted'),
+        { status: 404 }
+      );
+    }
+
+    const result = await performWorkspaceAction({
+      action: 'DELETE',
+      environment,
+      userId: payload.id,
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Workspace deleted successfully',
+      data: result.environment,
+      message: result.message,
     });
   } catch (error) {
     return handleAPIError(error);

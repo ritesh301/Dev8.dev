@@ -1,12 +1,13 @@
 import { z } from 'zod';
+import { SUPPORTED_CLOUD_PROVIDER } from './workspace-options';
 
 export const createWorkspaceSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
-  cloudProvider: z.enum(['AWS', 'GCP', 'AZURE', 'LOCAL']),
+  cloudProvider: z.literal(SUPPORTED_CLOUD_PROVIDER).default(SUPPORTED_CLOUD_PROVIDER),
   cloudRegion: z.string().min(1, 'Region is required'),
-  cpuCores: z.number().int().min(1).max(32),
-  memoryGB: z.number().int().min(1).max(256),
-  storageGB: z.number().int().min(1).max(1000),
+  cpuCores: z.number().int().min(1).max(4),
+  memoryGB: z.number().int().min(2).max(16),
+  storageGB: z.number().int().min(10).max(100),
   baseImage: z.string().min(1, 'Base image is required'),
   teamId: z.string().uuid().optional(),
 });
@@ -56,7 +57,7 @@ export const activityLogSchema = z.object({
   action: z.string().min(1),
   resourceType: z.string().min(1),
   resourceId: z.string().min(1),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 export const addSSHKeySchema = createSSHKeySchema;
 export const deleteTeamSchema = z.object({});
