@@ -27,51 +27,50 @@ export async function performWorkspaceAction(options: {
 }): Promise<ActionResult> {
   const { action, environment, userId } = options;
 
-  // Increase transaction timeout to 120 seconds for Agent API calls
-  return prisma.$transaction(async (tx) => {
-    const actionLog = await tx.environmentActionLog.create({
-      data: {
-        environmentId: environment.id,
-        userId,
-        action,
-        status: 'PENDING',
-      },
-    });
+  // Create action log first (not in transaction)
+  const actionLog = await prisma.environmentActionLog.create({
+    data: {
+      environmentId: environment.id,
+      userId,
+      action,
+      status: 'PENDING',
+    },
+  });
 
-    try {
-      console.log(
-        `[Workspace Action] ${action} started for workspace ${environment.id} by user ${userId}`,
-      );
+  try {
+    console.log(
+      `[Workspace Action] ${action} started for workspace ${environment.id} by user ${userId}`,
+    );
 
-      const agentEnabled = isAgentIntegrationEnabled();
-      const agentHealthy = agentEnabled ? await isAgentAvailable() : false;
-      if (agentEnabled && !agentHealthy) {
-        console.warn(`[Agent API] Health probe failed before ${action}; attempting anyway.`);
+    const agentEnabled = isAgentIntegrationEnabled();
+    const agentHealthy = agentEnabled ? await isAgentAvailable() : false;
+    if (agentEnabled && !agentHealthy) {
+      console.warn(`[Agent API] Health probe failed before ${action}; attempting anyway.`);
+    }
+
+    const tryAgentCall = async <T>(description: string, fn: () => Promise<T>): Promise<AgentCallResult<T>> => {
+      if (!agentEnabled) {
+        return { success: false, error: 'Agent integration disabled' };
       }
+      try {
+        const data = await fn();
+        return { success: true, data };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[Agent API] ${description} failed: ${reason}`);
+        return { success: false, error: reason };
+      }
+    };
 
-      const tryAgentCall = async <T>(description: string, fn: () => Promise<T>): Promise<AgentCallResult<T>> => {
-        if (!agentEnabled) {
-          return { success: false, error: 'Agent integration disabled' };
-        }
-        try {
-          const data = await fn();
-          return { success: true, data };
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`[Agent API] ${description} failed: ${reason}`);
-          return { success: false, error: reason };
-        }
-      };
+    let updatedEnvironment: Environment;
+    let message = '';
 
-      let updatedEnvironment: Environment;
-      let message = '';
-
-      switch (action) {
-        case 'START': {
-          await tx.environment.update({
-            where: { id: environment.id },
-            data: { status: 'STARTING' },
-          });
+    switch (action) {
+      case 'START': {
+        await prisma.environment.update({
+          where: { id: environment.id },
+          data: { status: 'STARTING' },
+        });
 
           const agentResult = await tryAgentCall('start workspace', () =>
             startEnvironment({
@@ -102,7 +101,7 @@ export async function performWorkspaceAction(options: {
             message = `${reason}Workspace marked as RUNNING locally.`;
           }
 
-          updatedEnvironment = await tx.environment.update({
+          updatedEnvironment = await prisma.environment.update({
             where: { id: environment.id },
             data: {
               status: 'RUNNING',
@@ -116,7 +115,7 @@ export async function performWorkspaceAction(options: {
           break;
         }
         case 'PAUSE': {
-          await tx.environment.update({
+          await prisma.environment.update({
             where: { id: environment.id },
             data: { status: 'STOPPING' },
           });
@@ -137,7 +136,7 @@ export async function performWorkspaceAction(options: {
               : 'Agent API disabled. Workspace paused locally.';
           }
 
-          updatedEnvironment = await tx.environment.update({
+          updatedEnvironment = await prisma.environment.update({
             where: { id: environment.id },
             data: {
               status: 'PAUSED',
@@ -147,7 +146,7 @@ export async function performWorkspaceAction(options: {
           break;
         }
         case 'STOP': {
-          await tx.environment.update({
+          await prisma.environment.update({
             where: { id: environment.id },
             data: { status: 'STOPPING' },
           });
@@ -168,7 +167,7 @@ export async function performWorkspaceAction(options: {
               : 'Agent API disabled. Workspace stopped locally.';
           }
 
-          updatedEnvironment = await tx.environment.update({
+          updatedEnvironment = await prisma.environment.update({
             where: { id: environment.id },
             data: {
               status: 'STOPPED',
@@ -178,7 +177,7 @@ export async function performWorkspaceAction(options: {
           break;
         }
         case 'DELETE': {
-          await tx.environment.update({
+          await prisma.environment.update({
             where: { id: environment.id },
             data: { status: 'DELETING' },
           });
@@ -201,7 +200,7 @@ export async function performWorkspaceAction(options: {
               : 'Agent API disabled. Workspace deleted locally.';
           }
 
-          updatedEnvironment = await tx.environment.update({
+          updatedEnvironment = await prisma.environment.update({
             where: { id: environment.id },
             data: {
               status: 'STOPPED',
@@ -215,7 +214,7 @@ export async function performWorkspaceAction(options: {
         }
       }
 
-      await tx.environmentActionLog.update({
+      await prisma.environmentActionLog.update({
         where: { id: actionLog.id },
         data: {
           status: 'SUCCESS',
@@ -232,7 +231,7 @@ export async function performWorkspaceAction(options: {
       };
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Unknown error';
-      await tx.environmentActionLog.update({
+      await prisma.environmentActionLog.update({
         where: { id: actionLog.id },
         data: {
           status: 'FAILED',
@@ -244,8 +243,4 @@ export async function performWorkspaceAction(options: {
       );
       throw error;
     }
-  }, {
-    maxWait: 120000, // 120 seconds max wait time
-    timeout: 120000, // 120 seconds timeout for the transaction
-  });
 }
