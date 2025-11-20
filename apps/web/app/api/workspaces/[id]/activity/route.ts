@@ -6,7 +6,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { recordActivity } from '@/lib/agent';
 import { handleAPIError, createErrorResponse, ErrorCodes } from '@/lib/errors';
 
 export async function POST(
@@ -50,19 +49,8 @@ export async function POST(
       },
     });
 
-    // Also send to Agent API for centralized tracking
-    try {
-      await recordActivity(id, {
-        workspaceId: id,
-        cpuUsage: body.cpuUsage || 0,
-        memoryUsage: body.memoryUsage || 0,
-        diskUsage: body.diskUsage || 0,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (agentError) {
-      console.error('Failed to send activity to Agent:', agentError);
-      // Don't fail the request if Agent is unavailable
-    }
+    // Activity recorded in database only
+    // Agent API integration can be added later if needed
 
     return NextResponse.json({
       success: true,
