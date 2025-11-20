@@ -21,33 +21,33 @@ a {
 
 @layer base {
   :root {
-    --background: 0 0% 3%;
+    --background: 230 19% 4%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 6%;
+    --card: 230 19% 6%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 4%;
+    --popover: 230 19% 8%;
     --popover-foreground: 0 0% 98%;
-    --primary: 189 100% 50%;
+    --primary: 165 100% 65%; /* neon green */
     --primary-foreground: 0 0% 0%;
-    --secondary: 271 81% 56%;
-    --secondary-foreground: 0 0% 100%;
-    --accent: 142 76% 56%;
+    --secondary: 296 100% 68%; /* neon magenta */
+    --secondary-foreground: 0 0% 0%;
+    --accent: 194 100% 66%; /* cyan glow */
     --accent-foreground: 0 0% 0%;
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 65%;
-    --destructive: 0 84% 60%;
+    --muted: 230 15% 14%;
+    --muted-foreground: 0 0% 70%;
+    --destructive: 0 100% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 15%;
-    --input: 0 0% 12%;
-    --ring: 189 100% 50%;
+    --border: 230 14% 18%;
+    --input: 230 14% 18%;
+    --ring: 165 100% 65%;
     --radius: 0.75rem;
-    --glow-primary: 189 100% 50%;
-    --glow-secondary: 271 81% 56%;
-    --glow-accent: 142 76% 56%;
-    --glow-intensity: 0.6;
+    --glow-primary: 165 100% 65%;
+    --glow-secondary: 296 100% 68%;
+    --glow-accent: 194 100% 66%;
+    --glow-intensity: 0.85;
     --sidebar-width: 280px;
     --sidebar-collapsed-width: 80px;
-    --grid-color: 0 0% 10%;
+    --grid-color: 230 10% 18%;
     --grid-size: 20px;
   }
 
@@ -182,79 +182,4 @@ a {
 
 
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 262.1 83.3% 57.8%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 215.4 16.3% 46.9%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 262.1 83.3% 57.8%;
-
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    /* You can define dark mode violet colors here later if you want */
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 262.1 83.3% 57.8%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 262.1 83.3% 57.8%;
-  }
-}
-
-
-
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
+/* Removed redundant light theme overrides to keep consistent neon-dark palette */

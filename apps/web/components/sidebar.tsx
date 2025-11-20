@@ -28,7 +28,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Ai Agents", href: "/ai-agents", icon: Bot },
+  // { title: "Ai Agents", href: "/ai-agents", icon: Bot }, // Temporarily hidden per product requirements
   { title: "Settings", href: "/settings", icon: Settings },
   { title: "Billing/Usage", href: "/billing-usage", icon: CreditCard },
   { title: "Reporting", href: "/reporting", icon: BarChart3 },
