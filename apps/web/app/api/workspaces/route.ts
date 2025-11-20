@@ -16,6 +16,7 @@ import {
   createEnvironment,
   isAgentIntegrationEnabled,
 } from '@/lib/agent';
+import { sanitizeVsCodeUrl } from '@/lib/url';
 
 /**
  * GET /api/workspaces
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
         await prisma.environment.update({
           where: { id: environment.id },
           data: {
-            vsCodeUrl: agentEnvironment.connectionUrls.vscodeWebUrl,
+            vsCodeUrl: sanitizeVsCodeUrl(agentEnvironment.connectionUrls.vscodeWebUrl) ?? null,
             sshConnectionString: agentEnvironment.connectionUrls.sshUrl,
             azureFileShareName: agentEnvironment.azureFileShare,
             aciContainerGroupId: agentEnvironment.azureContainerGroup,

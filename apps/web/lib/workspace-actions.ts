@@ -1,5 +1,6 @@
 import { Environment } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { sanitizeVsCodeUrl } from '@/lib/url';
 import {
   deleteEnvironment,
   isAgentAvailable,
@@ -90,7 +91,7 @@ export async function performWorkspaceAction(options: {
 
           if (agentResult.success) {
             const envData = agentResult.data as EnvironmentResponse;
-            newVsCodeUrl = envData.connectionUrls?.vscodeWebUrl || null;
+            newVsCodeUrl = sanitizeVsCodeUrl(envData.connectionUrls?.vscodeWebUrl) ?? null;
             newSshUrl = envData.connectionUrls?.sshUrl || null;
             message = 'Workspace started via Agent API';
           } else {
@@ -105,7 +106,7 @@ export async function performWorkspaceAction(options: {
             where: { id: environment.id },
             data: {
               status: 'RUNNING',
-              vsCodeUrl: newVsCodeUrl || environment.vsCodeUrl,
+              vsCodeUrl: newVsCodeUrl ?? environment.vsCodeUrl,
               sshConnectionString: newSshUrl || environment.sshConnectionString,
               lastAccessedAt: new Date(),
               stoppedAt: null,
