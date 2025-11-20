@@ -17,71 +17,12 @@ export async function GET(
   try {
     const payload = await requireAuth(request);
     const { id } = await params;
-    const { searchParams } = new URL(request.url);
-    
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
-    const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Verify user is team member
-    const isMember = await isTeamMember(payload.id, id);
-    if (!isMember) {
-      return NextResponse.json(
-        createErrorResponse(403, ErrorCodes.FORBIDDEN, 'You are not a member of this team'),
-        { status: 403 }
-      );
-    }
-
-    const where: Prisma.ResourceUsageWhereInput = {
-      environment: {
-        teamId: id,
-      },
-    };
-
-    if (startDate || endDate) {
-      const timestampFilter: Prisma.DateTimeFilter = {};
-      if (startDate) timestampFilter.gte = new Date(startDate);
-      if (endDate) timestampFilter.lte = new Date(endDate);
-      where.timestamp = timestampFilter;
-    }
-
-    const activities = await prisma.resourceUsage.findMany({
-      where,
-      include: {
-        environment: {
-          select: {
-            id: true,
-            name: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { timestamp: 'desc' },
-      skip: offset,
-      take: limit,
-    });
-
-    const total = await prisma.resourceUsage.count({ where });
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        activities,
-        pagination: {
-          total,
-          limit,
-          offset,
-          hasMore: offset + limit < total,
-        },
-      },
-    });
+    // Team functionality not yet implemented in database schema
+    return NextResponse.json(
+      createErrorResponse(501, ErrorCodes.NOT_FOUND, 'Team features are not yet implemented'),
+      { status: 501 }
+    );
   } catch (error) {
     return handleAPIError(error);
   }

@@ -17,17 +17,16 @@ export async function GET(
   try {
     const payload = await requireAuth(request);
     const { id } = await params;
-    const { searchParams } = new URL(request.url);
-    
-    const status = searchParams.get('status');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
-    const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Verify user is team member
-    const isMember = await isTeamMember(payload.id, id);
-    if (!isMember) {
-      return NextResponse.json(
-        createErrorResponse(403, ErrorCodes.FORBIDDEN, 'You are not a member of this team'),
+    // Team functionality not yet implemented in database schema
+    return NextResponse.json(
+      createErrorResponse(501, ErrorCodes.NOT_FOUND, 'Team features are not yet implemented'),
+      { status: 501 }
+    );
+  } catch (error) {
+    return handleAPIError(error);
+  }
+}
         { status: 403 }
       );
     }
